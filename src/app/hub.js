@@ -75,7 +75,8 @@ function wireHome() {
   $("btnReset").addEventListener("click", async () => {
     if (!confirm("Delete your MyPlayer and ALL progress? This cannot be undone.")) return;
     save = await store.reset();
-    sessionStorage.clear();
+    sessionStorage.removeItem("fb5.matchConfig");
+    sessionStorage.removeItem("fb5.matchResult");
     toast("SAVE WIPED — FRESH START");
     renderHome(); show("viewHome");
   });
