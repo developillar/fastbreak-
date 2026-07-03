@@ -1,0 +1,16 @@
+{
+  "name": "FASTBREAK 5",
+  "short_name": "FASTBREAK5",
+  "description": "One-thumb portrait 5v5 basketball. MyPlayer, MyCareer, Park.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#05060a",
+  "theme_color": "#0b0e16",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

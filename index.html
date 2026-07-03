@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0e16">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>FASTBREAK 5</title>
+<style>
+  :root{
+    --ink:#0b0e16; --glass:rgba(16,20,32,.62); --line:rgba(255,255,255,.14);
+    --txt:#eef2fa; --dim:rgba(238,242,250,.55); --you:#4f8cff; --cpu:#ff5449;
+    --amber:#ffb545; --good:#54e08a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+  html,body{width:100%;min-height:100%;background:#05060a;color:var(--txt);
+    font-family:-apple-system,"SF Pro Display",system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  body{display:flex;justify-content:center}
+  #app{width:100%;max-width:430px;min-height:100vh;background:radial-gradient(120% 90% at 50% 0%, #151c30, #05060a);
+    padding:max(26px, env(safe-area-inset-top)) 22px 40px;display:flex;flex-direction:column;align-items:center}
+  .ttl{font-size:12px;font-weight:800;letter-spacing:.5em;color:var(--amber);margin-bottom:8px}
+  .big{font-size:46px;font-weight:900;font-style:italic;line-height:.95;text-align:center;
+    background:linear-gradient(180deg,#fff,#9db8e8);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:4px}
+  .big small{display:block;font-size:17px;letter-spacing:.3em;-webkit-text-fill-color:var(--you)}
+  .sub{font-size:10px;letter-spacing:.2em;color:var(--dim);font-weight:700;margin-bottom:22px}
+  .card{width:100%;background:var(--glass);border:1px solid var(--line);border-radius:16px;
+    padding:16px;margin:7px 0;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+  .card h2{font-size:11px;font-weight:800;letter-spacing:.24em;color:var(--amber);margin-bottom:8px}
+  .card p{font-size:11.5px;color:var(--dim);line-height:1.5}
+  .go{display:block;width:100%;margin-top:12px;padding:13px;border-radius:999px;border:1.5px solid rgba(255,255,255,.25);
+    background:linear-gradient(180deg,rgba(79,140,255,.9),rgba(47,94,196,.9));color:#fff;font-size:13px;
+    font-weight:900;letter-spacing:.18em;text-align:center;cursor:pointer}
+  .go:active{transform:scale(.97)}
+  .go.alt{background:rgba(255,255,255,.06);color:var(--dim);font-size:11px;padding:10px}
+  .go.dis{opacity:.35;pointer-events:none}
+  .row{display:flex;gap:8px}
+  .row .go{flex:1}
+  .badge{display:inline-block;font-size:8.5px;font-weight:800;letter-spacing:.12em;color:var(--ink);
+    background:var(--amber);border-radius:5px;padding:2px 6px;margin-left:6px;vertical-align:2px}
+  .soon{background:rgba(255,255,255,.18);color:var(--dim)}
+  .stat{display:flex;justify-content:space-between;font-size:11px;font-weight:700;padding:3px 0;color:var(--txt)}
+  .stat span:first-child{color:var(--dim);letter-spacing:.1em}
+  .seg{display:flex;gap:5px;margin:7px 0}
+  .seg div{flex:1;padding:8px 0;border-radius:9px;background:rgba(255,255,255,.06);border:1px solid var(--line);
+    font-size:9.5px;font-weight:800;text-align:center;color:var(--dim);cursor:pointer}
+  .seg div.on{background:rgba(79,140,255,.28);border-color:rgba(79,140,255,.6);color:#fff}
+  input[type=text]{width:100%;background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:9px;
+    color:var(--txt);font:inherit;font-weight:800;letter-spacing:.06em;padding:11px;font-size:13px;-webkit-user-select:text;user-select:text}
+  .arow{display:grid;grid-template-columns:38px 1fr 44px 54px;gap:8px;align-items:center;padding:3px 0;font-size:10px;font-weight:800;color:var(--dim)}
+  .arow b{color:var(--txt);text-align:right;font-variant-numeric:tabular-nums}
+  .arow .cap{color:rgba(238,242,250,.35);text-align:right}
+  .arow .plus{background:rgba(84,224,138,.16);border:1px solid rgba(84,224,138,.4);color:var(--good);
+    border-radius:7px;text-align:center;padding:5px 0;cursor:pointer;font-weight:900}
+  .arow .plus.dis{opacity:.25;pointer-events:none}
+  .brow{display:grid;grid-template-columns:1fr 58px 64px;gap:8px;align-items:center;padding:4px 0;font-size:10px;font-weight:800}
+  .brow .nm{color:var(--txt)} .brow .nm i{display:block;font-style:normal;font-size:8.5px;color:var(--dim);font-weight:600}
+  .brow .tier{text-align:center;color:var(--amber)}
+  .brow .buy{background:rgba(255,181,69,.14);border:1px solid rgba(255,181,69,.4);color:var(--amber);
+    border-radius:7px;text-align:center;padding:5px 0;cursor:pointer}
+  .brow .buy.dis{opacity:.25;pointer-events:none}
+  table{width:100%;border-collapse:collapse;font-size:9.5px;font-variant-numeric:tabular-nums}
+  th,td{padding:3px 2px;text-align:right;border-bottom:1px solid rgba(255,255,255,.07)}
+  th{color:rgba(238,242,250,.4);font-size:8.5px;letter-spacing:.06em}
+  th:first-child,td:first-child{text-align:left}
+  td:first-child{font-weight:700;white-space:nowrap;max-width:92px;overflow:hidden;text-overflow:ellipsis}
+  .hidden{display:none !important}
+  .tiny{margin-top:20px;font-size:9px;color:rgba(238,242,250,.3);letter-spacing:.14em;text-align:center;line-height:1.8}
+  #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(80px);background:var(--glass);
+    border:1px solid var(--line);border-radius:12px;padding:10px 18px;font-size:11px;font-weight:800;letter-spacing:.08em;
+    backdrop-filter:blur(8px);transition:transform .25s;z-index:50;white-space:nowrap}
+  #toast.show{transform:translateX(-50%) translateY(0)}
+  .fscore{font-size:30px;font-weight:900;text-align:center;font-variant-numeric:tabular-nums;margin:4px 0}
+  .fmeta{font-size:10px;letter-spacing:.2em;color:var(--dim);text-align:center;font-weight:800;margin-bottom:8px}
+  .hl{font-size:10px;color:var(--dim);padding:2px 0;font-weight:700}
+  .hl b{color:var(--amber)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="ttl">FASTBREAK 5</div>
+  <div class="big">FAST<br>BREAK<small>FIVE</small></div>
+  <div class="sub" id="buildTag">MYPLAYER · MYCAREER · PARK — FRAMEWORK P0/P1</div>
+
+  <!-- ============ HOME ============ -->
+  <div id="viewHome" class="view" style="width:100%">
+    <div class="card" id="mpCard">
+      <h2>MYPLAYER</h2>
+      <div id="mpNone">
+        <p>One player, every mode. Create your MyPlayer — archetype sets your caps and badge access.</p>
+        <div class="go" id="btnCreate">CREATE MYPLAYER</div>
+      </div>
+      <div id="mpSome" class="hidden">
+        <div class="stat"><span id="mpName">—</span><b id="mpOvr">—</b></div>
+        <div class="stat"><span>UP / REP</span><b id="mpCur">—</b></div>
+        <div class="stat"><span>CAREER</span><b id="mpTotals">—</b></div>
+        <div class="row">
+          <div class="go alt" id="btnUpgrade">UPGRADES</div>
+          <div class="go alt" id="btnBadges">BADGES</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>PLAY</h2>
+      <p>Full-court 5v5 through the engine contract — your MyPlayer starts for the home squad.</p>
+      <div class="go" id="btnPlay">PLAY 5v5 <span class="badge">PLAYABLE</span></div>
+      <div class="go" id="btnSim">SIM A MATCH <span class="badge">HEADLESS</span></div>
+      <div class="go alt" id="btnClassic">CLASSIC MODE (NO MYPLAYER)</div>
+    </div>
+
+    <div class="card">
+      <h2>MODES</h2>
+      <div class="go alt dis">PARK — REP LADDER <span class="badge soon">P3</span></div>
+      <div class="go alt dis">MYCAREER — CH 0: BLACKTOP <span class="badge soon">P4</span></div>
+    </div>
+
+    <div class="card" id="lastResult" style="display:none">
+      <h2>LAST GAME</h2>
+      <div id="lastBody"></div>
+    </div>
+
+    <div class="tiny">ENGINE-AS-SERVICE · ONE SAVE BLOB · PWA-READY<br>
+      <span id="saveKind"></span></div>
+  </div>
+
+  <!-- ============ CREATE ============ -->
+  <div id="viewCreate" class="view hidden" style="width:100%">
+    <div class="card">
+      <h2>CREATE MYPLAYER</h2>
+      <p style="margin-bottom:8px">Name</p>
+      <input type="text" id="cName" maxlength="14" placeholder="YOUR NAME">
+      <p style="margin:10px 0 2px">Position</p>
+      <div class="seg" id="cPos"></div>
+      <p style="margin:10px 0 2px">Archetype</p>
+      <div id="cArch"></div>
+      <p id="cArchBlurb" style="margin-top:8px"></p>
+      <div class="go" id="btnDoCreate">LACE UP</div>
+      <div class="go alt" id="btnCancelCreate">BACK</div>
+    </div>
+  </div>
+
+  <!-- ============ UPGRADES ============ -->
+  <div id="viewUpgrade" class="view hidden" style="width:100%">
+    <div class="card">
+      <h2>ATTRIBUTES <span style="float:right;color:var(--good)" id="upBal"></span></h2>
+      <div id="upList"></div>
+      <div class="go alt" id="btnUpBack">BACK</div>
+    </div>
+  </div>
+
+  <!-- ============ BADGES ============ -->
+  <div id="viewBadges" class="view hidden" style="width:100%">
+    <div class="card">
+      <h2>BADGES <span style="float:right;color:var(--amber)" id="repBal"></span></h2>
+      <div id="badgeList"></div>
+      <div class="go alt" id="btnBadgeBack">BACK</div>
+    </div>
+  </div>
+
+  <!-- ============ RESULT ============ -->
+  <div id="viewResult" class="view hidden" style="width:100%">
+    <div class="card">
+      <h2 id="resTitle">FINAL</h2>
+      <div class="fscore" id="resScore">0 — 0</div>
+      <div class="fmeta" id="resMeta"></div>
+      <div id="resGrade"></div>
+      <div id="resBox" style="overflow-x:auto"></div>
+      <div id="resHl"></div>
+      <div class="go" id="btnResBack">BACK TO LOCKER ROOM</div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script type="module" src="src/app/hub.js"></script>
+</body>
+</html>
