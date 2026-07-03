@@ -34,6 +34,16 @@ async function init() {
   renderHome();
   consumePlayableResult();
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    /* when an updated SW takes control (skipWaiting+claim in sw.js), reload
+       once so users see new deploys on next launch instead of two launches
+       later. hadController=false means first-ever install: no reload. */
+    const hadController = !!navigator.serviceWorker.controller;
+    let refreshed = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController || refreshed) return;
+      refreshed = true;
+      location.reload();
+    });
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
 }
