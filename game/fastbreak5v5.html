@@ -189,7 +189,7 @@
     <div class="abtn" id="bPass">PASS<span class="sub">&#8593; LOB &#183; &#8595; BOUNCE</span></div>
     <div class="abtn" id="bCross">CROSS</div>
     <div class="abtn" id="bSpin">SPIN</div>
-    <div class="abtn" id="bScreen">SCRN</div>
+    <div class="abtn" id="bScreen">PICK<span class="sub">TAP&#183;HOLD</span></div>
   </div>
   <div id="defBtns" class="hidden">
     <div class="abtn" id="bBlock">BLOCK<span class="sub">JUMP</span></div>
@@ -243,7 +243,7 @@
       <b>SHOOT</b><span>hold + release in the green = automatic bucket &#183; defenders shrink the window &#183; dunk / layup / floater / fade picked by context</span>
       <b>PASS</b><span>tap = chest &#183; flick &#8593; lob (alley-oop!) &#183; flick &#8595; bounce</span>
       <b>CROSS / SPIN</b><span>break your defender's ankles</span>
-      <b>SCRN</b><span>call a teammate to set a screen</span>
+      <b>SCRN</b><span>call a pick &#8212; quick release: screener ROLLS to the rim (lob him!) &#183; hold: he POPS for three</span>
       <b>DEFENSE</b><span>you control the nearest man &#183; BLOCK jumps, STEAL swipes, SWAP cycles</span>
     </div>
     <div class="go" id="howBack">BACK</div>
@@ -728,6 +728,8 @@ class Player {
     this.cd = {cross:0, spin:0, steal:0, ai:Math.random()*.3, cut:3+Math.random()*4, block:0};
     this.spinT = 0; this.cutting = false; this.cutT = 0;
     this.screenT = 0; this.screenPos = null;
+    this.screenPlan = null; this.fadeT = 0; this.fadePos = null;   // pick & roll/pop
+    this.rimHangT = 0; this.hangPt = null; this.hangFall = false;  // posterize hang
     this.dunk = null; // {t,T,from,to,make,pts}
     this.seek = new THREE.Vector3();
     this.hasSeek = false;
@@ -887,7 +889,11 @@ bindBtn("bPass", null, (dy)=>{
 });
 bindBtn("bCross", ()=>userCross());
 bindBtn("bSpin", ()=>userSpin());
-bindBtn("bScreen", ()=>userScreen());
+/* SCRN is a 2K-style pick call: press summons the screener,
+   quick release = roll to the rim, long hold = pop behind the arc */
+let scrnDownAt = 0;
+bindBtn("bScreen", ()=>{ scrnDownAt = performance.now(); userScreen(); },
+                   ()=>{ setScreenPlan(performance.now() - scrnDownAt > 400 ? "fade" : "roll"); });
 bindBtn("bBlock", ()=>userBlock());
 bindBtn("bSteal", ()=>userSteal());
 bindBtn("bTurbo", ()=>{ if (G.stam>0.05 || G.turbo) G.turbo = !G.turbo; });
@@ -983,24 +989,34 @@ function tone(freq, dur, type, gain, slide){
   o.connect(g); g.connect(ac.destination);
   o.start(); o.stop(ac.currentTime+dur+.02);
 }
-function noise(dur, gain, hp){
+function noise(dur, gain, freq, type){
   const ac = AC; if(!ac) return;
   const n = Math.floor(ac.sampleRate*dur), buf = ac.createBuffer(1,n,ac.sampleRate);
   const d = buf.getChannelData(0);
   for(let i=0;i<n;i++) d[i] = (Math.random()*2-1)*(1-i/n);
   const s = ac.createBufferSource(); s.buffer = buf;
-  const f = ac.createBiquadFilter(); f.type="highpass"; f.frequency.value = hp||800;
+  const f = ac.createBiquadFilter(); f.type = type||"highpass"; f.frequency.value = freq||800;
   const g = ac.createGain(); g.gain.value = gain||.2;
   s.connect(f); f.connect(g); g.connect(ac.destination); s.start();
 }
 const SFX = {
-  bounce(){ tone(95,.09,"triangle",.22,-40); },
-  swish(){ noise(.28,.28,1200); },
-  rim(){ tone(210,.16,"square",.14,-60); noise(.1,.1,2000); },
-  buzz(){ tone(150,.85,"sawtooth",.22); },
-  whoosh(){ noise(.14,.12,500); },
-  steal(){ tone(600,.08,"square",.12,300); },
-  block(){ tone(120,.14,"square",.2,-50); noise(.12,.18,600); },
+  // ball on hardwood: low thump with a touch of leather slap
+  bounce(){ tone(82,.11,"sine",.3,-34); noise(.04,.07,320,"lowpass"); },
+  // nothing-but-net: airy brush, two bands
+  swish(){ noise(.3,.2,1500); noise(.2,.11,650,"bandpass"); },
+  // iron: two detuned metallic partials ringing out + a click of contact
+  rim(){ tone(492,.22,"square",.1,-36); tone(509,.17,"triangle",.12,-24); noise(.06,.12,2600); },
+  // horn: detuned saw stack, reads like an arena buzzer
+  buzz(){ tone(146,.9,"sawtooth",.17); tone(151,.9,"sawtooth",.17); tone(293,.9,"sawtooth",.07); },
+  whoosh(){ noise(.15,.13,430,"bandpass"); },
+  steal(){ tone(730,.06,"square",.11,420); tone(1000,.05,"square",.07,320); },
+  // rejection: deep thud + body contact
+  block(){ tone(92,.16,"square",.22,-42); noise(.14,.22,480,"lowpass"); },
+  // throwdown: sub boom, mid punch, glass shudder
+  slam(){ tone(50,.5,"sine",.5,-16); tone(102,.22,"triangle",.3,-42);
+          noise(.32,.4,260,"lowpass"); noise(.07,.16,2200); },
+  // rim rattle while hanging on it
+  rattle(){ tone(164,.34,"square",.1,-58); tone(171,.3,"triangle",.09,-50); noise(.1,.08,900,"bandpass"); },
   roar(){
     const ac = AC; if (!ac) return;
     const nn = Math.floor(ac.sampleRate*1.1), buf = ac.createBuffer(1, nn, ac.sampleRate);
@@ -1014,9 +1030,10 @@ const SFX = {
     gg.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + 1.05);
     src.connect(f); f.connect(gg); gg.connect(ac.destination); src.start();
   },
-  score2(){ tone(660,.1,"sine",.16); setTimeout(()=>tone(880,.14,"sine",.16),90); },
-  score3(){ tone(660,.09,"sine",.16); setTimeout(()=>tone(880,.09,"sine",.16),80); setTimeout(()=>tone(1180,.18,"sine",.18),160); },
-  click(){ tone(300,.05,"square",.08); },
+  score2(){ tone(587,.09,"triangle",.15); setTimeout(()=>tone(880,.16,"triangle",.15),95); },
+  score3(){ tone(587,.08,"triangle",.15); setTimeout(()=>tone(784,.08,"triangle",.15),85);
+            setTimeout(()=>tone(1175,.22,"triangle",.17),170); },
+  click(){ tone(340,.04,"square",.07,120); },
 };
 
 /* =====================================================================
@@ -1056,6 +1073,7 @@ function catchBall(p){
   if (p.team !== G.poss){ setPoss(p.team); }
   else if (wasRim){ G.shotClock = Math.max(G.shotClock, 14); ball.rimHit = false; }
   if (p.team===0) G.user = p;
+  if (G.phase==="inbound"){ G.phase = "play"; G.inbound = null; } // ball is live
 }
 
 /* ---------------- shooting ---------------- */
@@ -1292,6 +1310,14 @@ function updateDunk(p, dt){
       } else {
         dk.resolved = true;
         resolveDunkAtRim(p, rim);
+        if (ball.state==="drop"){
+          // flushed it — hang on the iron for a beat
+          p.dunk = null;
+          p.rimHangT = .45 + p.attrs.dunk*.45;
+          p.hangPt = {x: lerp(p.pos.x, rim.x, .5), z: lerp(p.pos.z, rim.z, .5)};
+          SFX.rattle();
+          return;
+        }
       }
     }
   } else if (!dk.released){
@@ -1349,8 +1375,8 @@ function finishScore(sh){
   G.hype = slam ? 1.6 : 1;
   SFX.roar();
   banner((sh.label==="THREE"?"SPLASH":sh.label) + "  +" + sh.pts, col);
-  if (sh.pts===3) SFX.score3(); else SFX.score2();
-  SFX.swish();
+  if (slam){ SFX.slam(); }
+  else { if (sh.pts===3) SFX.score3(); else SFX.score2(); SFX.swish(); }
   G.nextPoss = 1-team;
   setPoss(1-team); // transition starts during the celebration beat
   G.phase = "made"; G.madeT = 1.15;
@@ -1379,6 +1405,7 @@ function pickPassTarget(p, dir){
     const rim = rimOf(p.team);
     let s = open*1.15 + (dXZ(p.pos,rim)-dXZ(m.pos,rim))*.32;
     if (m.cutting) s += 1.6;
+    if (m.fadeT>0) s += 1.3;   // the popper is the designed target
     const dp = dXZ(p.pos, m.pos);
     if (dp>13) s -= (dp-13)*1.2;
     if (dp<1.5) s -= 3;
@@ -1491,13 +1518,34 @@ function userScreen(){
   }
   if (!best) return;
   best.screenT = 2.6;
+  best.screenPlan = null;
   best.screenPos = V(
     def.pos.x + (u.pos.x-def.pos.x)*.4,
     0,
     def.pos.z + (u.pos.z-def.pos.z)*.4
   );
+  G.screener = best;
   subBanner("SCREEN COMING");
   SFX.click();
+}
+function setScreenPlan(plan){
+  const s = G.screener;
+  if (!s || s.screenT<=0) return;
+  s.screenPlan = plan;
+  subBanner(plan==="roll" ? "ROLL TO THE RIM" : "PICK & POP");
+}
+function execScreenPlan(p){
+  const plan = p.screenPlan;
+  p.screenPlan = null;
+  if (!plan) return;
+  if (plan==="roll"){
+    p.cutting = true; p.cutT = 1.7;           // dives to the cylinder (lob-ready)
+  } else {
+    const rim = rimOf(p.team);
+    const sgn = Math.sign(p.pos.x) || (Math.random()<.5 ? -1 : 1);
+    p.fadeT = 2.2;
+    p.fadePos = V(sgn*5.9, 0, rim.z - Math.sign(rim.z)*4.2); // wing three
+  }
 }
 
 /* ---------------- defense actions ---------------- */
@@ -1654,7 +1702,7 @@ function cpuHandler(p, dt){
 }
 
 function updateAI(dt){
-  const live = (G.phase==="play" || G.phase==="made" || G.phase==="break");
+  const live = (G.phase==="play" || G.phase==="made" || G.phase==="break" || G.phase==="inbound");
   if (!live) return;
   // loose ball: nearest AI player on each team crashes for it
   let chase0=null, chase1=null;
@@ -1670,7 +1718,7 @@ function updateAI(dt){
   }
   for (const p of G.players){
     p.boxing = false;
-    if (p.dunk) continue;
+    if (p.dunk || p.rimHangT>0) continue;
     if (p.freezeT>0){ p.hasSeek=false; continue; }
     if (p===G.user && G.phase==="play" && !AUTOPLAY){ p.hasSeek=false; continue; }
     if (p===chase0 || p===chase1){
@@ -1704,6 +1752,12 @@ function updateAI(dt){
 
     const onOffense = p.team===G.poss;
     if (onOffense){
+      // inbound: receiver flashes toward the baseline to take the pass
+      if (G.phase==="inbound" && G.inbound && p===G.inbound.recv && ball.holder===G.inbound.passer){
+        const ib = G.inbound.passer;
+        setSeek(p, ib.pos.x*.4, ib.pos.z - Math.sign(ib.pos.z)*2.6, p.speedMax(false)*.9);
+        continue;
+      }
       if (ball.state==="pass" && ball.pass && ball.pass.target===p){
         setSeek(p, ball.p2.x, ball.p2.z, p.speedMax(true));
         if (ball.pass.oop && (ball.T - ball.t) < .34 && p.y===0) p.vy = 5.7;
@@ -1717,7 +1771,18 @@ function updateAI(dt){
       if (p.screenT>0 && p.screenPos){
         const d = dXZ(p.pos, p.screenPos);
         if (d > .3){ setSeek(p, p.screenPos.x, p.screenPos.z, p.speedMax(true)); p.planted=false; }
-        else { p.hasSeek=false; p.planted=true; p.vel.multiplyScalar(.5); }
+        else {
+          p.hasSeek=false; p.planted=true; p.vel.multiplyScalar(.5);
+          // handler used the pick: release the screen into its roll/pop
+          const h = ball.holder;
+          if (h && h.team===p.team && h!==p && dXZ(p.pos, h.pos) < 1.05)
+            p.screenT = Math.min(p.screenT, .22);
+        }
+        continue;
+      }
+      if (p.fadeT>0){         // popping to the wing after the screen
+        p.fadeT -= dt;
+        setSeek(p, p.fadePos.x, p.fadePos.z, p.speedMax(true));
         continue;
       }
       p.planted = false;
@@ -1814,12 +1879,26 @@ function updatePlayers(dt){
     if (p.lungeT>0) p.lungeT-=dt;
     if (p.shootT>0) p.shootT-=dt;
     if (p.spinT>0) p.spinT-=dt;
-    if (p.screenT>0){ p.screenT-=dt; if(p.screenT<=0){p.screenPos=null;p.planted=false;} }
+    if (p.screenT>0){ p.screenT-=dt; if(p.screenT<=0){p.screenPos=null;p.planted=false;execScreenPlan(p);} }
     if (p.jumpArms>0) p.jumpArms-=dt;
     if (p.burstT>0) p.burstT-=dt;
     if (p.landT>0) p.landT-=dt;
 
     if (p.dunk){ updateDunk(p, dt); syncRig(p, dt); continue; }
+
+    if (p.rimHangT>0){
+      // swinging on the rim: hands at the cylinder, legs kicking
+      p.rimHangT -= dt;
+      p.pos.x = lerp(p.pos.x, p.hangPt.x, 1-Math.exp(-10*dt));
+      p.pos.z = lerp(p.pos.z, p.hangPt.z, 1-Math.exp(-10*dt));
+      p.y = RIM_H - 2.06*p.hScale + Math.sin(p.runPhase*2.4)*.05; // hands on the iron
+      p.vy = 0; p.vel.set(0,0,0);
+      const rim = rimOf(p.team);
+      p.facing = lerpAngle(p.facing, Math.atan2(rim.x-p.pos.x, rim.z-p.pos.z), 1-Math.exp(-8*dt));
+      if (p.rimHangT<=0) p.hangFall = true;
+      syncRig(p, dt);
+      continue;
+    }
 
     // ---- desired velocity ----
     let dvx = 0, dvz = 0;
@@ -1863,7 +1942,10 @@ function updatePlayers(dt){
     if (p.y>0 || p.vy!==0){
       p.vy -= PGRAV*dt;
       p.y += p.vy*dt;
-      if (p.y<=0){ p.y=0; p.vy=0; }
+      if (p.y<=0){
+        p.y=0; p.vy=0;
+        if (p.hangFall){ p.hangFall=false; p.landT=.32; }  // drop off the rim
+      }
     }
 
     // facing
@@ -1883,10 +1965,10 @@ function updatePlayers(dt){
   // circle separation (screens really work because of this)
   for (let i=0;i<G.players.length;i++){
     const a = G.players[i];
-    if (a.dunk) continue;
+    if (a.dunk || a.rimHangT>0) continue;
     for (let j=i+1;j<G.players.length;j++){
       const b = G.players[j];
-      if (b.dunk) continue;
+      if (b.dunk || b.rimHangT>0) continue;
       const dx = b.pos.x-a.pos.x, dz = b.pos.z-a.pos.z;
       const ra = a.planted? .62 : (a.boxing? .5 : (a.spinT>0? .2 : .37));
       const rb = b.planted? .62 : (b.boxing? .5 : (b.spinT>0? .2 : .37));
@@ -1930,7 +2012,14 @@ function syncRig(p, dt){
   parts.legR.rotation.x = -s; parts.legR.rotation.z = p.boxing ? -.3 : 0;
 
   parts.armL.rotation.z = 0; parts.armR.rotation.z = 0;
-  if (p.dunk){
+  if (p.rimHangT>0){
+    // gripping the rim, body swinging under it
+    parts.armL.rotation.x = -2.95; parts.armR.rotation.x = -2.95;
+    parts.armL.rotation.z = .16;   parts.armR.rotation.z = -.16;
+    const sw = Math.sin(p.runPhase*2.4)*.3;
+    parts.legL.rotation.x = .3 + sw; parts.legR.rotation.x = .3 - sw;
+    g.rotation.x = .12 + sw*.25;
+  } else if (p.dunk){
     const dph = Math.min(1, p.dunk.t/p.dunk.T);
     if (p.dunk.mode==="dunk"){
       // cock back, then throw it down
@@ -2163,6 +2252,10 @@ function manualSwitch(){
 }
 function updateControl(dt){
   G.switchT -= dt;
+  if (G.phase==="inbound"){
+    if (G.poss===0 && G.inbound) G.user = G.inbound.recv;
+    return;
+  }
   if (G.poss===0){
     if (ball.holder && ball.holder.team===0){ G.user = ball.holder; return; }
     if (ball.state==="pass" && ball.pass && ball.pass.fromTeam===0){ G.user = ball.pass.target; return; }
@@ -2203,20 +2296,39 @@ function inboundFor(t){
   setPoss(t);
   G.shotClock = 24;
   ball.rimHit = false; ball.shot = null; ball.pass = null;
-  const pg = G.teams[t][0];
-  const bz = defRimOf(t).z;
-  pg.dunk = null; pg.y = 0; pg.vy = 0; pg.vel.set(0,0,0);
-  pg.pos.set((Math.random()<.5?-1:1)*2.3, 0, bz + Math.sign(bz)*1.05);
-  ball.state = "held"; ball.holder = pg; ball.lastHolder = pg;
-  ball.pos.set(pg.pos.x, 1, pg.pos.z);
-  if (t===0) G.user = pg;
-  G.phase = "play";
+  // the big takes it out on the baseline, the point guard comes to get it
+  const inb = G.teams[t][4], recv = G.teams[t][0];
+  const bz = defRimOf(t).z, s = Math.sign(bz);
+  for (const p of [inb, recv]){
+    p.dunk = null; p.rimHangT = 0; p.y = 0; p.vy = 0;
+    p.vel.set(0,0,0); p.freezeT = 0; p.cutting = false;
+    p.screenT = 0; p.screenPos = null; p.fadeT = 0;
+  }
+  const side = Math.random()<.5 ? -1 : 1;
+  inb.pos.set(side*1.7, 0, bz + s*1.3);
+  inb.facing = Math.atan2(0, -s);
+  recv.pos.set(-side*2.4, 0, bz - s*2.6);
+  ball.state = "held"; ball.holder = inb; ball.lastHolder = inb;
+  ball.pos.set(inb.pos.x, 1, inb.pos.z);
+  G.inbound = {passer: inb, recv, T: .85, guard: 0};
+  if (t===0) G.user = recv;
+  G.phase = "inbound";
 }
 
 function updateClocks(dt){
   if (G.phase==="made" || G.phase==="break"){
     G.madeT -= dt;
     if (G.madeT<=0) inboundFor(G.nextPoss);
+    return;
+  }
+  if (G.phase==="inbound"){
+    const ib = G.inbound;
+    if (!ib){ G.phase = "play"; return; }
+    ib.T -= dt; ib.guard += dt;
+    if (ib.T<=0 && ball.holder===ib.passer){
+      doPass(ib.passer, ib.recv, "chest");   // catchBall flips phase to play
+    }
+    if (ib.guard > 4){ G.phase = "play"; G.inbound = null; } // never wedge
     return;
   }
   if (G.phase!=="play") return;
@@ -2330,6 +2442,7 @@ function placeAll(){
       const p = G.teams[t][i];
       p.freezeT=0; p.lungeT=0; p.shootT=0; p.spinT=0; p.screenT=0;
       p.screenPos=null; p.dunk=null; p.cutting=false; p.planted=false;
+      p.screenPlan=null; p.fadeT=0; p.rimHangT=0; p.hangFall=false;
       p.y=0; p.vy=0; p.vel.set(0,0,0);
       if (t===0){
         const s = slotWorld(0,i);
@@ -2347,6 +2460,7 @@ function placeAll(){
 }
 function resetGame(){
   statReset();
+  G.inbound = null; G.screener = null;
   G.score = [0,0];
   G.turbo = false; G.stam = 1; G.chipFor = null;
   document.getElementById("bTurbo").classList.remove("hidden");
