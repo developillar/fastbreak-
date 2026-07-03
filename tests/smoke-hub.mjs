@@ -21,8 +21,10 @@ const check = (name, cond, extra = "") => {
 };
 
 try {
-  /* ---- hub: create MyPlayer ---- */
+  /* ---- hub: dismiss splash, create MyPlayer ---- */
   await page.goto(`http://localhost:${PORT}/index.html`);
+  await page.click("#splash");
+  await page.waitForSelector("#splash.gone");
   await page.click("#btnCreate");
   await page.fill("#cName", "SMOKE ROOK");
   await page.click('#cPos div[data-p="PG"]');
@@ -30,7 +32,8 @@ try {
   await page.click("#btnDoCreate");
   await page.waitForSelector("#mpSome:not(.hidden)");
   const mpName = await page.textContent("#mpName");
-  check("MyPlayer created", mpName.includes("SMOKE ROOK") && mpName.includes("PLAYMAKER"), mpName);
+  const mpSub = await page.textContent("#mpSub");
+  check("MyPlayer created", mpName.includes("SMOKE ROOK") && mpSub.includes("PLAYMAKER"), mpName + " / " + mpSub);
 
   /* ---- spend UP ---- */
   await page.click("#btnUpgrade");

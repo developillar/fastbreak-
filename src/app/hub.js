@@ -65,8 +65,9 @@ function renderHome() {
   $("mpNone").classList.toggle("hidden", !!mp);
   $("mpSome").classList.toggle("hidden", !mp);
   if (mp) {
-    $("mpName").textContent = mp.name + " · " + mp.position + " · " + ARCHETYPES[mp.archetypeId].label;
-    $("mpOvr").textContent = "OVR " + myPlayerOvr(mp);
+    $("mpName").textContent = mp.name;
+    $("mpSub").textContent = mp.position + " · " + ARCHETYPES[mp.archetypeId].label;
+    $("mpOvr").textContent = myPlayerOvr(mp);
     $("mpCur").textContent = mp.up + " UP · " + mp.rep + " REP";
     const t = mp.totals;
     $("mpTotals").textContent = t.games + " GP · " + t.wins + " W · " + t.pts + " PTS";
@@ -109,10 +110,9 @@ function renderUpgrades() {
     const cap = rateAttr(k, capsOf(mp)[k]);
     const c = canUpgrade(mp, k);
     return `<div class="arow"><span>${ATTR_LABELS[k]}</span>
-      <span style="height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden">
-        <span style="display:block;height:100%;width:${(cur - 25) / 74 * 100}%;background:var(--you)"></span></span>
+      <span class="bar"><i style="width:${(cur - 25) / 74 * 100}%"></i></span>
       <b>${cur}<span class="cap">/${cap}</span></b>
-      <span class="plus ${c.ok ? "" : "dis"}" data-k="${k}">+1 · ${c.ok ? c.cost + "UP" : "—"}</span></div>`;
+      <span class="plus ${c.ok ? "" : "dis"}" data-k="${k}">+1 · ${c.ok ? c.cost + " UP" : "—"}</span></div>`;
   }).join("");
   $("upList").querySelectorAll(".plus").forEach(el => el.addEventListener("click", () => {
     try { spendUP(save.myPlayer, el.dataset.k); store.save(save); renderUpgrades(); }
