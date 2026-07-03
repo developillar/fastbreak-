@@ -1,6 +1,6 @@
 /* Cache-first service worker — the whole game works offline once installed.
    Bump VERSION on every deploy that changes any precached file. */
-const VERSION = "fb5-v0.4.0";
+const VERSION = "fb5-v0.5.0";
 const PRECACHE = [
   "./",
   "./index.html",
@@ -36,6 +36,25 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+
+  /* Pages (navigations): NETWORK-FIRST so a fresh deploy shows up on the
+     next launch even on iOS home-screen apps, falling back to cache when
+     offline. Everything else stays cache-first for speed. */
+  if (e.request.mode === "navigate") {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(VERSION).then(c => c.put(e.request, copy));
+        }
+        return res;
+      }).catch(() =>
+        caches.match(e.request, { ignoreSearch: true }).then(hit => hit || caches.match("./index.html"))
+      )
+    );
+    return;
+  }
+
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(hit =>
       hit ||

@@ -72,6 +72,13 @@ function wireHome() {
   $("btnPlay").addEventListener("click", () => launchPlayable(false));
   $("btnClassic").addEventListener("click", () => launchPlayable(true));
   $("btnSim").addEventListener("click", runSim);
+  $("btnReset").addEventListener("click", async () => {
+    if (!confirm("Delete your MyPlayer and ALL progress? This cannot be undone.")) return;
+    save = await store.reset();
+    sessionStorage.clear();
+    toast("SAVE WIPED — FRESH START");
+    renderHome(); show("viewHome");
+  });
 }
 
 function renderHome() {

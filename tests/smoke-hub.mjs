@@ -62,6 +62,15 @@ try {
   const totals2 = await page.textContent("#mpTotals");
   check("save survives reload (IndexedDB)", totals2 === totals, totals2);
 
+  /* ---- in-app save reset ---- */
+  page.on("dialog", d => d.accept());
+  await page.click("#btnReset");
+  await page.waitForSelector("#mpNone:not(.hidden)");
+  check("reset wipes the save", true);
+  await page.reload();
+  await page.waitForSelector("#mpNone:not(.hidden)");
+  check("wipe persists after reload", true);
+
   /* ---- classic game boots standalone (no bridge config) ---- */
   await page.click("#btnClassic");
   await page.waitForSelector("#startBtn");
