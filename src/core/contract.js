@@ -56,14 +56,18 @@ export function defaultRules(overrides = {}) {
   };
 }
 
-export function makePlayerSpec({ id, name, role = "SF", attrs = {}, badges = [] }) {
-  return {
+export function makePlayerSpec({ id, name, role = "SF", attrs = {}, badges = [], look = null }) {
+  const spec = {
     id: String(id),
     name: String(name || "PLAYER"),
     role,
     attrs: clampAttrs(attrs),
     badges: badges.map(b => ({ id: b.id, tier: b.tier | 0 })),
   };
+  /* optional renderable appearance: {skin, build, wingspan (-1..1)} —
+     engines that draw bodies use it, the headless engine ignores it */
+  if (look) spec.look = { skin: look.skin | 0, build: look.build || "balanced", wingspan: +look.wingspan || 0 };
+  return spec;
 }
 
 export function makeMatchConfig({

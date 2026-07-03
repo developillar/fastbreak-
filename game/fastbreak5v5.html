@@ -684,7 +684,7 @@ function makeRig(jersey, shorts, skin, h){
   parts.shadow = sh;
   g.scale.setScalar(h);
   scene.add(g);
-  return {group:g, parts, mats:{jersey:mj, shorts:ms}};
+  return {group:g, parts, mats:{jersey:mj, shorts:ms, skin:mk}};
 }
 
 function drawTag(c, tx, text, color){
@@ -2403,7 +2403,14 @@ function applyTeams(defsOverride){
       e.badges = d.badges || null;   // badge hooks (bridge-provided lineups only)
       e.attrs = {}; for (const k in d.attrs) e.attrs[k] = d.attrs[k];
       e.hScale = .92 + e.attrs.height*.1;
-      e.group.scale.x = e.group.scale.z = e.hScale;
+      // physical build from the player builder (bridge lineups only)
+      const lk = d.look || null;
+      const bw = lk ? (lk.build==="slim" ? .94 : lk.build==="strong" ? 1.09 : 1) : 1;
+      e.group.scale.x = e.group.scale.z = e.hScale * bw;
+      const armS = lk ? 1 + (lk.wingspan||0)*.14 : 1;
+      e.parts.armL.scale.y = armS;
+      e.parts.armR.scale.y = armS;
+      if (lk && lk.skin != null) e.mats.skin.color.setHex(SKINS[((lk.skin|0)%SKINS.length+SKINS.length)%SKINS.length]);
       e.mats.jersey.color.setHex(defs[t].col);
       e.mats.shorts.color.setHex(defs[t].col2);
       drawTag(e.tagC, e.tagTx, e.role + "  " + e.name.replace(/^\w\. /, ""), defs[t].ui);
@@ -2631,7 +2638,7 @@ function toDef(t){
     city:"", name:t.name||t.abbr||"TEAM", abbr:t.abbr||"TEAM",
     col: hex(c.primary, 0x2f6fe0), col2: hex(c.secondary, 0x14265c),
     ui: typeof c.ui==="string" ? c.ui : "#7fb0ff",
-    players: t.lineup.slice(0,5).map(p=>({name:p.name, role:p.role, attrs:p.attrs, badges:p.badges||null})),
+    players: t.lineup.slice(0,5).map(p=>({name:p.name, role:p.role, attrs:p.attrs, badges:p.badges||null, look:p.look||null})),
   };
 }
 

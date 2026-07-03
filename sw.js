@@ -1,6 +1,6 @@
 /* Cache-first service worker — the whole game works offline once installed.
    Bump VERSION on every deploy that changes any precached file. */
-const VERSION = "fb5-v0.2.0";
+const VERSION = "fb5-v0.3.0";
 const PRECACHE = [
   "./",
   "./index.html",
@@ -15,6 +15,7 @@ const PRECACHE = [
   "./src/engine/headless.js",
   "./src/player/archetypes.js",
   "./src/player/badges.js",
+  "./src/player/body.js",
   "./src/player/myplayer.js",
   "./src/save/store.js",
   "./icons/icon-192.png",

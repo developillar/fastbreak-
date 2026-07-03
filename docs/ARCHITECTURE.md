@@ -38,6 +38,7 @@ The playable game is still one self-contained file, instrumented rather than rew
 `src/player/` — one persistent entity consumed by every mode:
 
 - **Archetypes** (`archetypes.js`): Slasher / Sharpshooter / Playmaker / Lockdown / Rim Protector / Two-Way. Each sets attribute **caps** and per-badge **max tiers**. Starting attrs = 72% of cap.
+- **Physical build** (`body.js`): the player builder. Height (position range, trimmed by archetype cap), wingspan (−1"…+7"), body type (slim/balanced/strong), skin tone. Choices bake tradeoffs into starting attrs (taller/longer → boards/defense, worse shooting/speed; slim ↔ strong swaps burst for strength) and travel to engines as `PlayerSpec.look` — the playable game renders skin color, frame width and arm length from it.
 - **Badges** (`badges.js`): 12 badges, Bronze→HoF, cost via `BADGE_TIER_COST`.
 - **Economy** (`myplayer.js`): UP buys attribute points (cost curve steepens toward the cap; height not purchasable), Rep buys badge tiers. Currencies flow **only from play** (`rewardsFor(grade)`), cosmetics-only if ever monetized.
 - `toPlayerSpec(mp)` is the only thing engines ever see.

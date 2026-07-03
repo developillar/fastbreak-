@@ -178,6 +178,29 @@
   .formlab{font-size:9px;font-weight:800;letter-spacing:.28em;color:var(--dim);margin:14px 0 6px}
   #cArchBlurb{font-size:11px;color:#93a3c4;line-height:1.55;min-height:34px;margin-top:10px;font-style:italic}
 
+  /* player builder */
+  .sval{float:right;font-family:var(--cond);font-style:italic;font-weight:900;font-size:13px;
+    letter-spacing:.04em;color:var(--cyan)}
+  input[type=range]{width:100%;height:26px;-webkit-appearance:none;appearance:none;background:transparent;
+    touch-action:auto;margin:2px 0 4px}
+  input[type=range]::-webkit-slider-runnable-track{height:6px;background:#0a0f1d;border:1px solid var(--line);
+    clip-path:polygon(3px 0,100% 0,100% calc(100% - 3px),calc(100% - 3px) 100%,0 100%,0 3px)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;margin-top:-9px;
+    background:linear-gradient(160deg,var(--blue),var(--blue2));border:1px solid rgba(140,190,255,.8);
+    clip-path:polygon(30% 0,100% 0,100% 70%,70% 100%,0 100%,0 30%);
+    box-shadow:0 3px 12px rgba(47,123,255,.6)}
+  input[type=range]::-moz-range-track{height:6px;background:#0a0f1d;border:1px solid var(--line)}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px;border:1px solid rgba(140,190,255,.8);
+    background:linear-gradient(160deg,var(--blue),var(--blue2));border-radius:3px}
+  .swatches{display:flex;gap:9px;margin:6px 0 2px}
+  .sw{width:38px;height:38px;cursor:pointer;border:2px solid rgba(120,160,255,.2);
+    clip-path:polygon(25% 0,100% 0,100% 75%,75% 100%,0 100%,0 25%);transition:transform .1s}
+  .sw.on{border-color:var(--cyan);transform:scale(1.12);box-shadow:0 0 14px rgba(57,212,255,.5)}
+  #cDeltas{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;min-height:22px}
+  .dchip{font-size:9.5px;font-weight:800;letter-spacing:.06em;padding:4px 8px;border-radius:3px}
+  .dchip.up{background:rgba(56,224,127,.13);border:1px solid rgba(56,224,127,.4);color:var(--good)}
+  .dchip.dn{background:rgba(255,68,56,.12);border:1px solid rgba(255,68,56,.4);color:#ff8d84}
+
   /* attribute rows */
   .arow{display:grid;grid-template-columns:42px 1fr 52px 62px;gap:9px;align-items:center;padding:4.5px 0;
     font-size:10.5px;font-weight:800;color:var(--dim)}
@@ -339,7 +362,24 @@
       <div class="formlab">ARCHETYPE</div>
       <div id="cArch"></div>
       <p id="cArchBlurb"></p>
-      <div class="bigbtn" id="btnDoCreate" style="margin-top:14px">LACE UP ›</div>
+
+      <div class="ptitle" style="margin-top:16px">BODY <span class="balance" style="color:var(--cyan)" id="cOvrPrev"></span></div>
+
+      <div class="formlab">HEIGHT <span class="sval" id="hVal"></span></div>
+      <input type="range" id="cHeight" step="1">
+
+      <div class="formlab">WINGSPAN <span class="sval" id="wVal"></span></div>
+      <input type="range" id="cWing" step="1">
+
+      <div class="formlab">BUILD</div>
+      <div class="seg" id="cBuild"></div>
+
+      <div class="formlab">SKIN TONE</div>
+      <div class="swatches" id="cSkin"></div>
+
+      <div id="cDeltas"></div>
+
+      <div class="bigbtn" id="btnDoCreate" style="margin-top:16px">LACE UP ›</div>
       <div class="backbtn" id="btnCancelCreate">‹ BACK</div>
     </div>
   </div>

@@ -10,6 +10,10 @@ import { ATTR_KEYS, ATTR_LABELS, rateAttr } from "../core/attributes.js";
 import { ARCHETYPES, POSITIONS, TIER_NAMES } from "../player/archetypes.js";
 import { BADGES } from "../player/badges.js";
 import {
+  SKIN_TONES, BUILDS, heightRange, wingspanRange, formatHeight,
+  defaultBody, sanitizeBody, bodyMods,
+} from "../player/body.js";
+import {
   createMyPlayer, myPlayerOvr, capsOf, canUpgrade, spendUP,
   canUnlockBadge, unlockBadge, toPlayerSpec, applyMatchRewards, badgeAccessOf,
 } from "../player/myplayer.js";
@@ -66,7 +70,8 @@ function renderHome() {
   $("mpSome").classList.toggle("hidden", !mp);
   if (mp) {
     $("mpName").textContent = mp.name;
-    $("mpSub").textContent = mp.position + " · " + ARCHETYPES[mp.archetypeId].label;
+    $("mpSub").textContent = (mp.body ? formatHeight(mp.body.heightIn) + " · " : "") +
+      mp.position + " · " + ARCHETYPES[mp.archetypeId].label;
     $("mpOvr").textContent = myPlayerOvr(mp);
     $("mpCur").textContent = mp.up + " UP · " + mp.rep + " REP";
     const t = mp.totals;
@@ -74,13 +79,13 @@ function renderHome() {
   }
 }
 
-/* ---------------- create flow ---------------- */
-let cSel = { pos: "SG", arch: "sharpshooter" };
+/* ---------------- create flow (player builder) ---------------- */
+let cSel = { pos: "SG", arch: "sharpshooter", body: defaultBody("SG", ARCHETYPES.sharpshooter) };
 function wireCreate() {
   $("btnCancelCreate").addEventListener("click", () => show("viewHome"));
   $("btnDoCreate").addEventListener("click", () => {
     try {
-      const mp = createMyPlayer({ name: $("cName").value, position: cSel.pos, archetypeId: cSel.arch });
+      const mp = createMyPlayer({ name: $("cName").value, position: cSel.pos, archetypeId: cSel.arch, body: cSel.body });
       mp.createdAt = Date.now();
       save.myPlayer = mp;
       store.save(save);
@@ -88,17 +93,79 @@ function wireCreate() {
       renderHome(); show("viewHome");
     } catch (e) { toast(e.message.toUpperCase()); }
   });
+  $("cHeight").addEventListener("input", () => {
+    cSel.body.heightIn = +$("cHeight").value;
+    cSel.body = sanitizeBody(cSel.body, cSel.pos, ARCHETYPES[cSel.arch]); // re-clamp wingspan to new height
+    renderBuilder();
+  });
+  $("cWing").addEventListener("input", () => {
+    cSel.body.wingspanIn = +$("cWing").value;
+    renderBuilder();
+  });
+}
+function reBody() {
+  cSel.body = sanitizeBody(cSel.body, cSel.pos, ARCHETYPES[cSel.arch]);
 }
 function renderCreate() {
   const posEl = $("cPos");
   posEl.innerHTML = POSITIONS.map(p => `<div data-p="${p}" class="${p === cSel.pos ? "on" : ""}">${p}</div>`).join("");
-  posEl.querySelectorAll("div").forEach(el => el.addEventListener("click", () => { cSel.pos = el.dataset.p; renderCreate(); }));
+  posEl.querySelectorAll("div").forEach(el => el.addEventListener("click", () => {
+    cSel.pos = el.dataset.p; reBody(); renderCreate();
+  }));
   const archEl = $("cArch");
   archEl.innerHTML = `<div class="seg" style="flex-wrap:wrap">` +
     Object.values(ARCHETYPES).map(a =>
       `<div style="flex:1 1 30%" data-a="${a.id}" class="${a.id === cSel.arch ? "on" : ""}">${a.label}</div>`).join("") + `</div>`;
-  archEl.querySelectorAll("[data-a]").forEach(el => el.addEventListener("click", () => { cSel.arch = el.dataset.a; renderCreate(); }));
+  archEl.querySelectorAll("[data-a]").forEach(el => el.addEventListener("click", () => {
+    cSel.arch = el.dataset.a; reBody(); renderCreate();
+  }));
   $("cArchBlurb").textContent = ARCHETYPES[cSel.arch].blurb;
+
+  const buildEl = $("cBuild");
+  buildEl.innerHTML = Object.values(BUILDS).map(b =>
+    `<div data-b="${b.id}" class="${b.id === cSel.body.build ? "on" : ""}">${b.label}</div>`).join("");
+  buildEl.querySelectorAll("div").forEach(el => el.addEventListener("click", () => {
+    cSel.body.build = el.dataset.b; renderCreate();
+  }));
+
+  const skinEl = $("cSkin");
+  skinEl.innerHTML = SKIN_TONES.map((hex, i) =>
+    `<div class="sw ${i === cSel.body.skin ? "on" : ""}" data-s="${i}"
+       style="background:#${hex.toString(16).padStart(6, "0")}"></div>`).join("");
+  skinEl.querySelectorAll(".sw").forEach(el => el.addEventListener("click", () => {
+    cSel.body.skin = +el.dataset.s; renderCreate();
+  }));
+
+  renderBuilder();
+}
+/* sliders + live tradeoff readout (cheap enough to run every input tick) */
+function renderBuilder() {
+  const arch = ARCHETYPES[cSel.arch];
+  const [hMin, hMax] = heightRange(cSel.pos, arch);
+  const h = $("cHeight");
+  h.min = hMin; h.max = hMax; h.value = cSel.body.heightIn;
+  $("hVal").textContent = formatHeight(cSel.body.heightIn);
+  const [wMin, wMax] = wingspanRange(cSel.body.heightIn);
+  const w = $("cWing");
+  w.min = wMin; w.max = wMax; w.value = cSel.body.wingspanIn;
+  const wd = cSel.body.wingspanIn - cSel.body.heightIn;
+  $("wVal").textContent = formatHeight(cSel.body.wingspanIn) + " (" + (wd >= 0 ? "+" : "") + wd + '")';
+
+  const mods = bodyMods(cSel.body, cSel.pos, arch);
+  const chips = Object.entries(mods)
+    .filter(([, v]) => Math.abs(v) >= 0.005)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => {
+      const pts = Math.round(v * 74); // 0..1 attr space -> rating points
+      if (!pts) return "";
+      return `<span class="dchip ${v > 0 ? "up" : "dn"}">${v > 0 ? "+" : ""}${pts} ${ATTR_LABELS[k]}</span>`;
+    }).join("");
+  $("cDeltas").innerHTML = chips || `<span class="dchip up" style="opacity:.5">NEUTRAL BUILD</span>`;
+
+  try {
+    const prev = createMyPlayer({ name: "PREVIEW", position: cSel.pos, archetypeId: cSel.arch, body: cSel.body });
+    $("cOvrPrev").textContent = "OVR " + myPlayerOvr(prev);
+  } catch { $("cOvrPrev").textContent = ""; }
 }
 
 /* ---------------- upgrades ---------------- */

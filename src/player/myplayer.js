@@ -8,24 +8,37 @@ import { ATTR_KEYS, rateAttr, unrateAttr, ovrOf, clampAttrs } from "../core/attr
 import { makePlayerSpec, GRADE_ORDER } from "../core/contract.js";
 import { ARCHETYPES, POSITIONS, startingAttrs } from "./archetypes.js";
 import { BADGES, BADGE_TIER_COST } from "./badges.js";
+import { sanitizeBody, bodyMods, heightScaleOf, toLook } from "./body.js";
 
 export const MYPLAYER_SCHEMA = 1;
 export const MYPLAYER_ID = "myplayer";
 
-export function createMyPlayer({ name, position, archetypeId, look = {} }) {
+export function createMyPlayer({ name, position, archetypeId, body = null, look = {} }) {
   const archetype = ARCHETYPES[archetypeId];
   if (!archetype) throw new Error("Unknown archetype: " + archetypeId);
   if (!POSITIONS.includes(position)) throw new Error("Unknown position: " + position);
   const cleanName = String(name || "").trim().toUpperCase().replace(/[<>&"]/g, "").slice(0, 14);
   if (!cleanName) throw new Error("Name required");
+
+  /* physical profile: height/wingspan/build bake into the starting attrs,
+     clamped to the archetype caps — the build is a tradeoff, never a cheat */
+  const cleanBody = sanitizeBody(body, position, archetype);
+  const attrs = clampAttrs(startingAttrs(archetype, position));
+  const mods = bodyMods(cleanBody, position, archetype);
+  for (const [k, v] of Object.entries(mods)) {
+    attrs[k] = Math.max(0.25, Math.min(archetype.caps[k] ?? 0.99, attrs[k] + v));
+  }
+  attrs.height = Math.min(archetype.caps.height, heightScaleOf(cleanBody.heightIn));
+
   return {
     schema: MYPLAYER_SCHEMA,
     id: MYPLAYER_ID,
     name: cleanName,
     position,
     archetypeId,
-    look: { skin: look.skin ?? 0, jerseyNum: look.jerseyNum ?? 0 },
-    attrs: clampAttrs(startingAttrs(archetype, position)),
+    body: cleanBody,
+    look: { skin: cleanBody.skin, jerseyNum: look.jerseyNum ?? 0 },
+    attrs: clampAttrs(attrs),
     badges: {},                 // {badgeId: tier}
     up: 12,                     // starter allowance: shape your build immediately
     rep: 0,
@@ -99,6 +112,7 @@ export function toPlayerSpec(mp) {
     role: mp.position,
     attrs: mp.attrs,
     badges: Object.entries(mp.badges).map(([id, tier]) => ({ id, tier })),
+    look: mp.body ? toLook(mp.body) : null,
   });
 }
 
