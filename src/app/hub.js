@@ -23,6 +23,7 @@ import {
   recordGame, runSimBlock, careerContext, interpolate, STORY,
 } from "../career/career.js";
 
+const APP_VERSION = "0.8.1";   // keep in sync with sw.js / version.json / footer
 const $ = id => document.getElementById(id);
 const store = new SaveStore();
 const league = buildLeague();
@@ -51,6 +52,33 @@ async function init() {
     });
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
+  checkForUpdate();
+}
+
+/* self-heal: the version beacon bypasses every cache (SW exempts it, and
+   we ask no-store), so a stale client can always discover the truth. On
+   mismatch: nudge the SW, purge caches, reload — once per session, so a
+   propagating CDN can never cause a reload loop. */
+async function checkForUpdate() {
+  try {
+    const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
+    const v = (await res.json()).version;
+    if (!v || v === APP_VERSION) { sessionStorage.removeItem("fb5.updReload"); return; }
+    if (sessionStorage.getItem("fb5.updReload")) return;   // already tried this session
+    sessionStorage.setItem("fb5.updReload", "1");
+    toast("UPDATING TO V" + v + " …");
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.update().catch(() => {})));
+    } catch {}
+    setTimeout(async () => {
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      } catch {}
+      location.reload();
+    }, 2500);
+  } catch {}
 }
 
 /* ---------------- views ---------------- */

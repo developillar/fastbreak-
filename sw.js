@@ -1,6 +1,8 @@
 /* Cache-first service worker — the whole game works offline once installed.
    Bump VERSION on every deploy that changes any precached file. */
-const VERSION = "fb5-v0.8.0";
+/* KEEP IN SYNC (tests/version.test.mjs enforces): sw.js VERSION,
+   version.json, index.html footer tag, hub.js APP_VERSION */
+const VERSION = "fb5-v0.8.1";
 const PRECACHE = [
   "./",
   "./index.html",
@@ -38,6 +40,10 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+
+  // the version beacon must NEVER come from any cache — it is how stale
+  // clients discover they are stale
+  if (e.request.url.includes("version.json")) return;
 
   /* Pages (navigations): NETWORK-FIRST so a fresh deploy shows up on the
      next launch even on iOS home-screen apps, falling back to cache when
