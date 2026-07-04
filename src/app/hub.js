@@ -23,7 +23,7 @@ import {
   recordGame, runSimBlock, careerContext, interpolate, STORY,
 } from "../career/career.js";
 
-const APP_VERSION = "0.8.1";   // keep in sync with sw.js / version.json / footer
+const APP_VERSION = "0.8.2";   // keep in sync with sw.js / version.json / footer
 const $ = id => document.getElementById(id);
 const store = new SaveStore();
 const league = buildLeague();
@@ -33,7 +33,12 @@ let save = null;
 init();
 async function init() {
   save = await store.load();
-  $("saveKind").textContent = "SAVE: " + store.backend.kind.toUpperCase();
+  const sk = $("saveKind");
+  if (sk) sk.textContent = "SAVE: " + store.backend.kind.toUpperCase();
+  // page/script skew: the HTML footer carries the page's version; if it
+  // disagrees with this script we're a mixed-version load — resync now
+  const pageV = $("verTag")?.textContent?.replace(/^V/, "");
+  if (pageV && pageV !== APP_VERSION) forceRefresh(pageV);
   wireHome();
   wireCreate();
   wireCutscene();
@@ -64,21 +69,25 @@ async function checkForUpdate() {
     const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
     const v = (await res.json()).version;
     if (!v || v === APP_VERSION) { sessionStorage.removeItem("fb5.updReload"); return; }
-    if (sessionStorage.getItem("fb5.updReload")) return;   // already tried this session
-    sessionStorage.setItem("fb5.updReload", "1");
-    toast("UPDATING TO V" + v + " …");
-    try {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(regs.map(r => r.update().catch(() => {})));
-    } catch {}
-    setTimeout(async () => {
-      try {
-        const keys = await caches.keys();
-        await Promise.all(keys.map(k => caches.delete(k)));
-      } catch {}
-      location.reload();
-    }, 2500);
+    forceRefresh(v);
   } catch {}
+}
+function forceRefresh(v) {
+  if (sessionStorage.getItem("fb5.updReload")) return;   // once per session, no loops
+  sessionStorage.setItem("fb5.updReload", "1");
+  try { toast("UPDATING TO V" + v + " …"); } catch {}
+  try {
+    navigator.serviceWorker?.getRegistrations?.()
+      .then(regs => regs.forEach(r => r.update().catch(() => {})))
+      .catch(() => {});
+  } catch {}
+  setTimeout(async () => {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    } catch {}
+    location.reload();
+  }, 2200);
 }
 
 /* ---------------- views ---------------- */
@@ -97,21 +106,21 @@ function toast(msg) {
 
 /* ---------------- home ---------------- */
 function wireHome() {
-  $("btnCreate").addEventListener("click", () => { renderCreate(); show("viewCreate"); });
-  $("btnUpgrade").addEventListener("click", () => { renderUpgrades(); show("viewUpgrade"); });
-  $("btnBadges").addEventListener("click", () => { renderBadges(); show("viewBadges"); });
-  $("btnUpBack").addEventListener("click", () => { renderHome(); show("viewHome"); });
-  $("btnBadgeBack").addEventListener("click", () => { renderHome(); show("viewHome"); });
-  $("btnResBack").addEventListener("click", () => {
+  $("btnCreate")?.addEventListener("click", () => { renderCreate(); show("viewCreate"); });
+  $("btnUpgrade")?.addEventListener("click", () => { renderUpgrades(); show("viewUpgrade"); });
+  $("btnBadges")?.addEventListener("click", () => { renderBadges(); show("viewBadges"); });
+  $("btnUpBack")?.addEventListener("click", () => { renderHome(); show("viewHome"); });
+  $("btnBadgeBack")?.addEventListener("click", () => { renderHome(); show("viewHome"); });
+  $("btnResBack")?.addEventListener("click", () => {
     if (resultReturnView === "viewCareer" && save.career) { renderCareer(); show("viewCareer"); }
     else { renderHome(); show("viewHome"); }
   });
-  $("btnCareer").addEventListener("click", openCareer);
-  $("btnCareerBack").addEventListener("click", () => { renderHome(); show("viewHome"); });
-  $("btnPlay").addEventListener("click", () => launchPlayable(false));
-  $("btnClassic").addEventListener("click", () => launchPlayable(true));
-  $("btnSim").addEventListener("click", runSim);
-  $("btnReset").addEventListener("click", async () => {
+  $("btnCareer")?.addEventListener("click", openCareer);
+  $("btnCareerBack")?.addEventListener("click", () => { renderHome(); show("viewHome"); });
+  $("btnPlay")?.addEventListener("click", () => launchPlayable(false));
+  $("btnClassic")?.addEventListener("click", () => launchPlayable(true));
+  $("btnSim")?.addEventListener("click", runSim);
+  $("btnReset")?.addEventListener("click", async () => {
     if (!confirm("Delete your MyPlayer and ALL progress? This cannot be undone.")) return;
     save = await store.reset();
     sessionStorage.removeItem("fb5.matchConfig");
@@ -125,8 +134,8 @@ function renderHome() {
   const mp = save.myPlayer;
   $("mpNone").classList.toggle("hidden", !!mp);
   $("mpSome").classList.toggle("hidden", !mp);
-  // career tile state
-  if (save.career) {
+  // career tile state (nodes may be absent on a mixed-version page)
+  if (save.career && $("careerPill")) {
     const cur = currentEvent(save.career);
     $("careerPill").textContent = cur.done ? "COMPLETE" : "CH " + (cur.chapterIndex);
     $("careerSub").textContent = cur.done
@@ -147,8 +156,8 @@ function renderHome() {
 /* ---------------- create flow (player builder) ---------------- */
 let cSel = { pos: "SG", arch: "sharpshooter", body: defaultBody("SG", ARCHETYPES.sharpshooter) };
 function wireCreate() {
-  $("btnCancelCreate").addEventListener("click", () => show("viewHome"));
-  $("btnDoCreate").addEventListener("click", () => {
+  $("btnCancelCreate")?.addEventListener("click", () => show("viewHome"));
+  $("btnDoCreate")?.addEventListener("click", () => {
     try {
       const mp = createMyPlayer({ name: $("cName").value, position: cSel.pos, archetypeId: cSel.arch, body: cSel.body });
       mp.createdAt = Date.now();
@@ -158,12 +167,12 @@ function wireCreate() {
       renderHome(); show("viewHome");
     } catch (e) { toast(e.message.toUpperCase()); }
   });
-  $("cHeight").addEventListener("input", () => {
+  $("cHeight")?.addEventListener("input", () => {
     cSel.body.heightIn = +$("cHeight").value;
     cSel.body = sanitizeBody(cSel.body, cSel.pos, ARCHETYPES[cSel.arch]); // re-clamp wingspan to new height
     renderBuilder();
   });
-  $("cWing").addEventListener("input", () => {
+  $("cWing")?.addEventListener("input", () => {
     cSel.body.wingspanIn = +$("cWing").value;
     renderBuilder();
   });
@@ -393,7 +402,7 @@ function renderCareer() {
         <div class="evtitle">${ev.title}</div>
         <div class="evsub">STORY BEAT · TAP TO WATCH</div>
         <div class="evbtns"><div class="bigbtn" id="evPlayScene">▶ PLAY SCENE</div></div></div>`;
-      $("evPlayScene").addEventListener("click", () => playScene(ev));
+      $("evPlayScene")?.addEventListener("click", () => playScene(ev));
     } else if (ev.type === "game") {
       const objs = (ev.objectives || [])
         .map(o => "◆ " + o.type.replace("_", " ").toUpperCase() + (o.type === "team_win" ? "" : " " + o.target)).join("<br>");
@@ -406,14 +415,14 @@ function renderCareer() {
           <div class="bigbtn" id="evPlayGame">PLAY ›</div>
           <div class="bigbtn alt" id="evSimGame">SIM</div>
         </div></div>`;
-      $("evPlayGame").addEventListener("click", launchCareerGame);
-      $("evSimGame").addEventListener("click", simCareerGame);
+      $("evPlayGame")?.addEventListener("click", launchCareerGame);
+      $("evSimGame")?.addEventListener("click", simCareerGame);
     } else if (ev.type === "sim") {
       $("carEvent").innerHTML = `<div class="evcard"><div class="evkind">SEASON BLOCK</div>
         <div class="evtitle">${ev.label}</div>
         <div class="evsub">${ev.count} GAMES · ONE TAP</div>
         <div class="evbtns"><div class="bigbtn alt" id="evSimBlock">SIM ${ev.count} GAMES ›</div></div></div>`;
-      $("evSimBlock").addEventListener("click", () => {
+      $("evSimBlock")?.addEventListener("click", () => {
         const r = runSimBlock(save, league);
         store.save(save);
         toast(`${r.w}W ${r.l}L · +${r.up} UP · +${r.rep} REP`);
@@ -470,7 +479,7 @@ function endScene(choiceId) {
   show("viewCareer");
 }
 function wireCutscene() {
-  $("viewCutscene").addEventListener("click", () => {
+  $("viewCutscene")?.addEventListener("click", () => {
     if (!cs.scene) return;
     const atEnd = cs.line >= cs.scene.lines.length - 1;
     if (atEnd) {

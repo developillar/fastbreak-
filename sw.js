@@ -2,7 +2,7 @@
    Bump VERSION on every deploy that changes any precached file. */
 /* KEEP IN SYNC (tests/version.test.mjs enforces): sw.js VERSION,
    version.json, index.html footer tag, hub.js APP_VERSION */
-const VERSION = "fb5-v0.8.1";
+const VERSION = "fb5-v0.8.2";
 const PRECACHE = [
   "./",
   "./index.html",
@@ -45,19 +45,25 @@ self.addEventListener("fetch", e => {
   // clients discover they are stale
   if (e.request.url.includes("version.json")) return;
 
-  /* Pages (navigations): NETWORK-FIRST so a fresh deploy shows up on the
-     next launch even on iOS home-screen apps, falling back to cache when
-     offline. Everything else stays cache-first for speed. */
-  if (e.request.mode === "navigate") {
+  /* NETWORK-FIRST for pages AND app code so every online load is
+     version-coherent (a fresh page never runs against stale scripts).
+     Cache is the offline fallback. Only the big immutable assets
+     (vendored three.js, icons) stay cache-first for speed. */
+  const url = new URL(e.request.url);
+  const cacheFirst = /\/(vendor|icons)\//.test(url.pathname);
+
+  if (!cacheFirst) {
     e.respondWith(
       fetch(e.request).then(res => {
-        if (res.ok) {
+        if (res.ok && url.origin === location.origin) {
           const copy = res.clone();
           caches.open(VERSION).then(c => c.put(e.request, copy));
         }
         return res;
       }).catch(() =>
-        caches.match(e.request, { ignoreSearch: true }).then(hit => hit || caches.match("./index.html"))
+        caches.match(e.request, { ignoreSearch: true }).then(hit =>
+          hit || (e.request.mode === "navigate" ? caches.match("./index.html") : Response.error())
+        )
       )
     );
     return;
@@ -67,7 +73,7 @@ self.addEventListener("fetch", e => {
     caches.match(e.request, { ignoreSearch: true }).then(hit =>
       hit ||
       fetch(e.request).then(res => {
-        if (res.ok && new URL(e.request.url).origin === location.origin) {
+        if (res.ok && url.origin === location.origin) {
           const copy = res.clone();
           caches.open(VERSION).then(c => c.put(e.request, copy));
         }
