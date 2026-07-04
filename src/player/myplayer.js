@@ -129,10 +129,12 @@ export function rewardsFor(myPlayerResult) {
   return { up, rep };
 }
 
-export function applyMatchRewards(mp, result) {
+export function applyMatchRewards(mp, result, scale = 1) {
   const r = result?.myPlayer;
   if (!r || r.line?.id !== mp.id) return { up: 0, rep: 0 };
-  const { up, rep } = rewardsFor(r);
+  let { up, rep } = rewardsFor(r);
+  up = Math.max(0, Math.round(up * scale));
+  rep = Math.max(0, Math.round(rep * scale));
   mp.up += up;
   mp.rep += rep;
   mp.totals.games += 1;

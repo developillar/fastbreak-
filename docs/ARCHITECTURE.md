@@ -68,8 +68,7 @@ The playable game is still one self-contained file, instrumented rather than rew
 - **P1 MyPlayer + save** ✅
 - **P2 badges + economy** ✅ core (hooks live in both engines; more badges/cosmetics later)
 - **P3 Park**: court-select hub, `OpponentProvider` interface (BotProvider now, NetProvider later), playable half-court + small-sided, rep ladder
-- **P4 MyCareer skeleton**: season structure (key games + one-tap sim), pre-game objectives, post-game grades — all of which already exist at the contract level
-- **P5 story runtime** (scene graph: triggers → lines → choices → effects), Ch 0–2, Rival #1
+- **P4+P5 MyCareer** ✅ core: `src/career/story.js` is the entire narrative as data (7 chapters of events: scenes with lines/choices/effects/flags, key games with objectives and mustWin, one-tap sim blocks) — **edit that one file to write the story**; `src/career/career.js` walks it (event cursor, choice effects, template interpolation `{name}/{team}/{rival}`, draft assignment from combine grades, street-team generation, key-game MatchConfigs, sim blocks, rewards scaling played 1×/sim .6×/filler .35×). Letterboxed cutscene player + career screen in the hub. Rivalry meter tracks; relationship meters remain P6.
 - **P6 relationships** (Coach Trust / Chemistry / Media / Fan Rep) + remaining chapters
 - **P7 cosmetics + emote taunts** · **Later**: NetProvider, cloud saves
 

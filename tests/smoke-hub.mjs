@@ -62,6 +62,45 @@ try {
   const totals2 = await page.textContent("#mpTotals");
   check("save survives reload (IndexedDB)", totals2 === totals, totals2);
 
+  /* ---- MyCareer: cutscene -> choice -> key game -> next beat ---- */
+  await page.click("#btnCareer");
+  await page.waitForSelector("#viewCareer:not(.hidden)");
+  check("career opens at CH 0", (await page.textContent("#carChapter")).includes("CH 0"));
+  check("first event is a cutscene", (await page.textContent("#carEvent")).includes("CUTSCENE"));
+  await page.click("#evPlayScene");
+  await page.waitForSelector("#viewCutscene:not(.hidden)");
+  const line1 = await page.textContent("#csText");
+  check("cutscene renders placeholder lines", line1.includes("[EDIT]"), line1.slice(0, 40));
+  await page.click("#viewCutscene");   // line 2
+  await page.click("#viewCutscene");   // line 3
+  await page.click("#viewCutscene");   // end scene
+  await page.waitForSelector("#viewCareer:not(.hidden)");
+  check("scene completion returns to career", (await page.textContent("#carEvent")).includes("KEY GAME"));
+
+  // sim the must-win blacktop game until it's won (bounded retries)
+  let advancedToChoice = false;
+  for (let i = 0; i < 15 && !advancedToChoice; i++) {
+    await page.click("#evSimGame");
+    await page.waitForSelector("#viewResult:not(.hidden)");
+    await page.click("#btnResBack");
+    await page.waitForSelector("#viewCareer:not(.hidden)");
+    advancedToChoice = (await page.textContent("#carEvent")).includes("CUTSCENE");
+  }
+  check("must-win game eventually advances the story", advancedToChoice);
+  await page.click("#evPlayScene");
+  await page.waitForSelector("#viewCutscene:not(.hidden)");
+  await page.click("#viewCutscene"); // line 2 -> choice appears
+  await page.waitForSelector("#csChoices .csopt");
+  await page.click("#csChoices .csopt");  // pick first option
+  await page.waitForSelector("#viewCareer:not(.hidden)");
+  check("choice ends scene, chapter rolls to CH 1", (await page.textContent("#carChapter")).includes("CH 1"));
+  await page.reload();
+  await page.waitForSelector("#mpSome:not(.hidden)");
+  await page.click("#btnCareer");
+  await page.waitForSelector("#viewCareer:not(.hidden)");
+  check("career progress persists across reload", (await page.textContent("#carChapter")).includes("CH 1"));
+  await page.click("#btnCareerBack");
+
   /* ---- in-app save reset ---- */
   page.on("dialog", d => d.accept());
   await page.click("#btnReset");

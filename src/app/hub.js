@@ -18,6 +18,10 @@ import {
   canUnlockBadge, unlockBadge, toPlayerSpec, applyMatchRewards, badgeAccessOf,
 } from "../player/myplayer.js";
 import { SaveStore } from "../save/store.js";
+import {
+  startCareer, currentEvent, completeScene, careerGameConfig,
+  recordGame, runSimBlock, careerContext, interpolate, STORY,
+} from "../career/career.js";
 
 const $ = id => document.getElementById(id);
 const store = new SaveStore();
@@ -31,6 +35,7 @@ async function init() {
   $("saveKind").textContent = "SAVE: " + store.backend.kind.toUpperCase();
   wireHome();
   wireCreate();
+  wireCutscene();
   renderHome();
   consumePlayableResult();
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
@@ -49,7 +54,8 @@ async function init() {
 }
 
 /* ---------------- views ---------------- */
-const VIEWS = ["viewHome", "viewCreate", "viewUpgrade", "viewBadges", "viewResult"];
+const VIEWS = ["viewHome", "viewCreate", "viewUpgrade", "viewBadges", "viewResult", "viewCareer", "viewCutscene"];
+let resultReturnView = "viewHome";   // where BACK on the result screen goes
 function show(view) {
   for (const v of VIEWS) $(v).classList.toggle("hidden", v !== view);
 }
@@ -68,7 +74,12 @@ function wireHome() {
   $("btnBadges").addEventListener("click", () => { renderBadges(); show("viewBadges"); });
   $("btnUpBack").addEventListener("click", () => { renderHome(); show("viewHome"); });
   $("btnBadgeBack").addEventListener("click", () => { renderHome(); show("viewHome"); });
-  $("btnResBack").addEventListener("click", () => { renderHome(); show("viewHome"); });
+  $("btnResBack").addEventListener("click", () => {
+    if (resultReturnView === "viewCareer" && save.career) { renderCareer(); show("viewCareer"); }
+    else { renderHome(); show("viewHome"); }
+  });
+  $("btnCareer").addEventListener("click", openCareer);
+  $("btnCareerBack").addEventListener("click", () => { renderHome(); show("viewHome"); });
   $("btnPlay").addEventListener("click", () => launchPlayable(false));
   $("btnClassic").addEventListener("click", () => launchPlayable(true));
   $("btnSim").addEventListener("click", runSim);
@@ -86,6 +97,14 @@ function renderHome() {
   const mp = save.myPlayer;
   $("mpNone").classList.toggle("hidden", !!mp);
   $("mpSome").classList.toggle("hidden", !mp);
+  // career tile state
+  if (save.career) {
+    const cur = currentEvent(save.career);
+    $("careerPill").textContent = cur.done ? "COMPLETE" : "CH " + (cur.chapterIndex);
+    $("careerSub").textContent = cur.done
+      ? "LEGACY SEALED · " + save.career.record.w + "W " + save.career.record.l + "L"
+      : cur.chapter.title + " · " + save.career.record.w + "W " + save.career.record.l + "L";
+  }
   if (mp) {
     $("mpName").textContent = mp.name;
     $("mpSub").textContent = (mp.body ? formatHeight(mp.body.heightIn) + " · " : "") +
@@ -275,7 +294,19 @@ function consumePlayableResult() {
   try {
     const result = JSON.parse(raw);
     validateMatchResult(result);
-    afterMatch(result);
+    const careerCur = save.career?.pending ? currentEvent(save.career) : null;
+    if (careerCur && !careerCur.done && careerCur.event.type === "game") {
+      // returning from a career key game: record into the story
+      save.career.pending = null;
+      const r = recordGame(save, result);      // rewards applied inside
+      store.save(save);
+      if (r.retry) toast("MUST-WIN: RUN IT BACK");
+      else if (r.earned.up || r.earned.rep) toast(`+${r.earned.up} UP · +${r.earned.rep} REP`);
+      resultReturnView = "viewCareer";
+    } else {
+      afterMatch(result);
+      resultReturnView = "viewHome";
+    }
     renderResult(result);
     show("viewResult");
   } catch (e) { console.error("bad matchResult", e); }
@@ -286,6 +317,7 @@ function runSim() {
   const cfg = nextConfig({ classic: !save.myPlayer });
   const result = simulate(cfg);
   afterMatch(result);
+  resultReturnView = "viewHome";
   renderResult(result);
   show("viewResult");
 }
@@ -296,6 +328,153 @@ function afterMatch(result) {
     store.save(save);
     if (earned.up || earned.rep) toast(`+${earned.up} UP · +${earned.rep} REP`);
   }
+}
+
+/* =========================================================================
+   MYCAREER — event card, cutscene player, key-game launch/return
+   ========================================================================= */
+function openCareer() {
+  if (!save.myPlayer) { toast("CREATE A MYPLAYER FIRST"); return; }
+  if (!save.career) {
+    startCareer(save, { seed: (Math.random() * 0xffffffff) >>> 0 });
+    store.save(save);
+  }
+  renderCareer();
+  show("viewCareer");
+}
+
+function renderCareer() {
+  const c = save.career;
+  const cur = currentEvent(c);
+  const ctx = careerContext(save, league);
+  $("carRecord").textContent = c.record.w + "W — " + c.record.l + "L";
+
+  if (cur.done) {
+    $("carChapter").textContent = "CAREER COMPLETE";
+    $("carBanner").innerHTML = `<b>${ctx.name}</b> · ${ctx.team}<br>` +
+      `RIVALRY ${c.rivalMeter} · ${c.seenScenes.length} SCENES · ${Object.keys(c.flags).join(" · ") || "—"}`;
+    $("carEvent").innerHTML = `<div class="evcard"><div class="evkind">LEGACY</div>
+      <div class="evtitle">THE STORY IS TOLD</div>
+      <div class="evsub">FINAL RECORD ${c.record.w}W — ${c.record.l}L</div></div>`;
+  } else {
+    const ch = cur.chapter, ev = cur.event;
+    $("carChapter").textContent = `CH ${cur.chapterIndex} · ${ch.title}`;
+    $("carBanner").innerHTML = `<b>${ctx.name}</b> · ${ctx.team} · ${ch.subtitle}`;
+    if (ev.type === "scene") {
+      $("carEvent").innerHTML = `<div class="evcard"><div class="evkind">CUTSCENE</div>
+        <div class="evtitle">${ev.title}</div>
+        <div class="evsub">STORY BEAT · TAP TO WATCH</div>
+        <div class="evbtns"><div class="bigbtn" id="evPlayScene">▶ PLAY SCENE</div></div></div>`;
+      $("evPlayScene").addEventListener("click", () => playScene(ev));
+    } else if (ev.type === "game") {
+      const objs = (ev.objectives || [])
+        .map(o => "◆ " + o.type.replace("_", " ").toUpperCase() + (o.type === "team_win" ? "" : " " + o.target)).join("<br>");
+      $("carEvent").innerHTML = `<div class="evcard"><div class="evkind">KEY GAME${ev.mustWin ? " · MUST WIN" : ""}</div>
+        <div class="evtitle">${ev.label}</div>
+        <div class="evsub">${interpolate(ev.opponent === "rival" ? "vs {rival}" : "OFFICIAL MATCHUP", ctx)}
+          · ${["ROOKIE","PRO","ALL-STAR"][ev.difficulty ?? 1]}</div>
+        <div class="evobj">${objs}</div>
+        <div class="evbtns">
+          <div class="bigbtn" id="evPlayGame">PLAY ›</div>
+          <div class="bigbtn alt" id="evSimGame">SIM</div>
+        </div></div>`;
+      $("evPlayGame").addEventListener("click", launchCareerGame);
+      $("evSimGame").addEventListener("click", simCareerGame);
+    } else if (ev.type === "sim") {
+      $("carEvent").innerHTML = `<div class="evcard"><div class="evkind">SEASON BLOCK</div>
+        <div class="evtitle">${ev.label}</div>
+        <div class="evsub">${ev.count} GAMES · ONE TAP</div>
+        <div class="evbtns"><div class="bigbtn alt" id="evSimBlock">SIM ${ev.count} GAMES ›</div></div></div>`;
+      $("evSimBlock").addEventListener("click", () => {
+        const r = runSimBlock(save, league);
+        store.save(save);
+        toast(`${r.w}W ${r.l}L · +${r.up} UP · +${r.rep} REP`);
+        renderCareer();
+      });
+    }
+  }
+
+  $("carHistory").innerHTML = c.history.slice(-8).reverse().map(h =>
+    h.type === "sim"
+      ? `<div class="hrow"><span>${h.label}</span><b>${h.w}W ${h.l}L</b></div>`
+      : `<div class="hrow"><span>${h.label}${h.simmed ? " (SIM)" : ""}</span>
+          <b class="${h.won ? "gpos" : "gneg"}">${h.won ? "W" : "L"} ${h.score.home}-${h.score.away} · ${h.grade || ""}</b></div>`
+  ).join("") || `<div class="hrow"><span>NO GAMES YET</span><b>—</b></div>`;
+}
+
+/* ---------------- cutscene player ---------------- */
+const cs = { scene: null, line: 0 };
+function playScene(scene) {
+  cs.scene = scene; cs.line = 0;
+  renderCutsceneLine();
+  show("viewCutscene");
+}
+function renderCutsceneLine() {
+  const ctx = careerContext(save, league);
+  const cur = currentEvent(save.career);
+  $("csTag").textContent = (cur.done ? "" : `CH ${cur.chapterIndex} · ${cur.chapter.title} — `) + cs.scene.title;
+  const line = cs.scene.lines[cs.line];
+  $("csSpeaker").textContent = interpolate(line.speaker, ctx);
+  $("csText").textContent = interpolate(line.text, ctx);
+  $("csText").style.animation = "none"; void $("csText").offsetWidth;
+  $("csText").style.animation = "";
+  const atEnd = cs.line >= cs.scene.lines.length - 1;
+  const hasChoice = atEnd && cs.scene.choice;
+  $("csHint").style.display = hasChoice ? "none" : "block";
+  $("csHint").textContent = atEnd ? "TAP TO END SCENE ›" : "TAP TO CONTINUE ›";
+  const ch = $("csChoices");
+  ch.style.display = hasChoice ? "flex" : "none";
+  if (hasChoice) {
+    ch.innerHTML = `<div class="evkind" style="margin-top:2px">${interpolate(cs.scene.choice.prompt, ctx)}</div>` +
+      cs.scene.choice.options.map(o =>
+        `<div class="csopt" data-c="${o.id}">${interpolate(o.text, ctx)}</div>`).join("");
+    ch.querySelectorAll(".csopt").forEach(el => el.addEventListener("click", e => {
+      e.stopPropagation();
+      endScene(el.dataset.c);
+    }));
+  }
+}
+function endScene(choiceId) {
+  completeScene(save, choiceId);
+  store.save(save);
+  cs.scene = null;
+  renderCareer();
+  show("viewCareer");
+}
+function wireCutscene() {
+  $("viewCutscene").addEventListener("click", () => {
+    if (!cs.scene) return;
+    const atEnd = cs.line >= cs.scene.lines.length - 1;
+    if (atEnd) {
+      if (!cs.scene.choice) endScene(null);   // choices handle themselves
+    } else {
+      cs.line++;
+      renderCutsceneLine();
+    }
+  });
+}
+
+/* ---------------- career key games ---------------- */
+function launchCareerGame() {
+  const cfg = careerGameConfig(save, league);
+  cfg.meta.returnUrl = "../index.html";
+  save.career.pending = { eventId: currentEvent(save.career).event.id };
+  store.save(save).then(() => {
+    sessionStorage.setItem("fb5.matchConfig", JSON.stringify(cfg));
+    sessionStorage.removeItem("fb5.matchResult");
+    location.href = "game/fastbreak5v5.html";
+  });
+}
+function simCareerGame() {
+  const cfg = careerGameConfig(save, league);
+  const result = simulate(cfg);
+  const r = recordGame(save, result, { simmed: true });
+  store.save(save);
+  if (r.retry) toast("MUST-WIN: RUN IT BACK");
+  else if (r.earned.up || r.earned.rep) toast(`+${r.earned.up} UP · +${r.earned.rep} REP (SIM)`);
+  resultReturnView = "viewCareer";
+  renderResult(result);
+  show("viewResult");
 }
 
 /* ---------------- result view ---------------- */

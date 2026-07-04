@@ -245,6 +245,53 @@
   .hl{font-size:10px;color:var(--dim);padding:3px 0;font-weight:700}
   .hl b{color:var(--amber);font-family:var(--cond);font-style:italic;letter-spacing:.06em}
 
+  /* ================= MyCareer ================= */
+  #carPanel::before{background:linear-gradient(180deg,var(--good),#0f9e56)}
+  #carBanner{font-size:10px;font-weight:800;letter-spacing:.2em;color:var(--dim);line-height:1.9}
+  #carBanner b{color:var(--txt)}
+  .evcard{position:relative;border:1px solid rgba(56,224,127,.35);margin:10px 0;padding:16px 16px 14px 20px;
+    background:linear-gradient(160deg,#0e2417,#0b101f 75%);
+    clip-path:polygon(10px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 10px)}
+  .evcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--good)}
+  .evkind{font-size:8.5px;font-weight:800;letter-spacing:.3em;color:var(--good);margin-bottom:5px}
+  .evtitle{font-family:var(--cond);font-weight:900;font-style:italic;font-size:24px;line-height:1}
+  .evsub{font-size:9.5px;font-weight:700;letter-spacing:.18em;color:var(--dim);margin-top:6px}
+  .evobj{font-size:10px;font-weight:700;color:#9fd8b6;margin-top:8px;line-height:1.7}
+  .evbtns{display:flex;gap:8px;margin-top:12px}
+  .evbtns .bigbtn{flex:1;font-size:15px;padding:12px;margin:0}
+  .evbtns .bigbtn.alt{background:#0d1428;border-color:var(--line);color:#c9d6f2}
+  .hrow{display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--dim);
+    padding:5px 0;border-bottom:1px solid rgba(120,160,255,.07)}
+  .hrow b{color:var(--txt)} .hrow .gpos{color:var(--good)} .hrow .gneg{color:#ff8d84}
+
+  /* ================= cutscene player ================= */
+  #viewCutscene{position:fixed;inset:0;z-index:30;background:#000;cursor:pointer}
+  #viewCutscene::before,#viewCutscene::after{content:"";position:absolute;left:0;right:0;height:11vh;z-index:2;background:#000}
+  #viewCutscene::before{top:0;border-bottom:1px solid rgba(255,255,255,.08)}
+  #viewCutscene::after{bottom:0;border-top:1px solid rgba(255,255,255,.08)}
+  #viewCutscene{background:
+    radial-gradient(120% 90% at 50% 30%, #131c38 0%, #05070d 75%)}
+  #csTag{position:absolute;top:calc(11vh + 14px);left:18px;z-index:3;
+    font-size:9px;font-weight:800;letter-spacing:.34em;color:var(--amber)}
+  #csBox{position:absolute;left:14px;right:14px;bottom:calc(11vh + 14px);z-index:3;
+    background:rgba(8,12,24,.88);border:1px solid rgba(120,160,255,.25);padding:16px 18px 14px 20px;
+    clip-path:polygon(10px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 10px);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  #csBox::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+    background:linear-gradient(180deg,var(--amber),#ff7a3c)}
+  #csSpeaker{font-family:var(--cond);font-weight:900;font-style:italic;font-size:14px;
+    letter-spacing:.18em;color:var(--amber);margin-bottom:7px}
+  #csText{font-size:14px;line-height:1.65;color:#e8eefb;min-height:52px;animation:csfade .3s both}
+  @keyframes csfade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  #csHint{margin-top:10px;font-size:8.5px;font-weight:800;letter-spacing:.3em;color:#5b6a8c;
+    text-align:right;animation:pulse 1.6s ease-in-out infinite}
+  #csChoices{display:none;flex-direction:column;gap:8px;margin-top:12px}
+  #csChoices .csopt{padding:12px 14px;cursor:pointer;border:1px solid rgba(57,212,255,.4);
+    background:linear-gradient(160deg,#12233f,#0b101f);
+    font-family:var(--cond);font-weight:900;font-style:italic;font-size:14px;letter-spacing:.05em;color:#dbe7fb;
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 8px)}
+  #csChoices .csopt:active{filter:brightness(1.4)}
+
   .backbtn{display:flex;align-items:center;justify-content:center;margin-top:14px;padding:13px;cursor:pointer;
     font-family:var(--cond);font-weight:900;font-style:italic;font-size:15px;letter-spacing:.2em;color:#c9d6f2;
     background:#0d1428;border:1px solid var(--line);
@@ -329,13 +376,13 @@
       <div class="chev">›</div>
     </div>
 
-    <div class="tile locked">
-      <div class="edge"></div>
+    <div class="tile" id="btnCareer" style="--edge:var(--good)">
+      <div class="edge" style="background:var(--good)"></div>
       <div class="tin">
-        <div class="tlab">MYCAREER <span class="pill off">SOON</span></div>
-        <div class="tsub">CH 0: BLACKTOP · ROAD TO THE LEAGUE</div>
+        <div class="tlab">MYCAREER <span class="pill" style="background:var(--good);color:#03210f" id="careerPill">NEW</span></div>
+        <div class="tsub" id="careerSub">CH 0: BLACKTOP · ROAD TO THE LEAGUE</div>
       </div>
-      <div class="chev">›</div>
+      <div class="chev" style="color:var(--good)">›</div>
     </div>
 
     <div class="tile locked">
@@ -351,7 +398,7 @@
     <div class="rowlink" id="btnReset" style="color:#7a4046">RESET SAVE DATA</div>
 
     <div class="foot">ENGINE-AS-SERVICE · ONE SAVE BLOB · PWA<br>NO PAY-TO-WIN. EVER.<br>
-      <span id="verTag" style="color:#4a5878">V0.6.1</span></div>
+      <span id="verTag" style="color:#4a5878">V0.7.0</span></div>
   </div>
 
   <!-- ============ CREATE ============ -->
@@ -402,6 +449,31 @@
       <div class="ptitle">BADGES <span class="balance" style="color:var(--amber)" id="repBal"></span></div>
       <div id="badgeList"></div>
       <div class="backbtn" id="btnBadgeBack">‹ LOCKER ROOM</div>
+    </div>
+  </div>
+
+  <!-- ============ MYCAREER ============ -->
+  <div id="viewCareer" class="view hidden">
+    <div class="panel" id="carPanel">
+      <div class="ptitle" id="carChapter">MYCAREER</div>
+      <div id="carBanner"></div>
+    </div>
+    <div id="carEvent"></div>
+    <div class="panel">
+      <div class="ptitle">SEASON LOG <span class="balance" id="carRecord"></span></div>
+      <div id="carHistory"></div>
+    </div>
+    <div class="backbtn" id="btnCareerBack">‹ LOCKER ROOM</div>
+  </div>
+
+  <!-- ============ CUTSCENE (letterboxed player) ============ -->
+  <div id="viewCutscene" class="hidden">
+    <div id="csTag"></div>
+    <div id="csBox">
+      <div id="csSpeaker"></div>
+      <div id="csText"></div>
+      <div id="csHint">TAP TO CONTINUE ›</div>
+      <div id="csChoices"></div>
     </div>
   </div>
 
