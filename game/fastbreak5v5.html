@@ -690,27 +690,31 @@ function makeRig(jersey, shorts, skin, h){
   const mk = new THREE.MeshLambertMaterial({color:skin});
   const mshoe = new THREE.MeshLambertMaterial({color:0x22262e});
   const parts = {};
-  // rounded jersey torso + shoulder caps
-  const torso = new THREE.Mesh(new THREE.SphereGeometry(.34,16,12), mj);
-  torso.scale.set(.84, 1.02, .66);
-  torso.position.y = 1.26; g.add(torso);
-  for (const sx of [-.27, .27]){
-    const shd = new THREE.Mesh(new THREE.SphereGeometry(.105,12,9), mj);
-    shd.position.set(sx, 1.47, 0); g.add(shd);
+  // athletic capsule torso — slim, tall, runs down INTO the shorts (no
+  // midriff gap), with shoulder caps at the top corners
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(.30,16,12), mj);
+  torso.scale.set(.80, 1.3, .62);
+  torso.position.y = 1.20; g.add(torso);
+  for (const sx of [-.235, .235]){
+    const shd = new THREE.Mesh(new THREE.SphereGeometry(.095,12,9), mj);
+    shd.position.set(sx, 1.49, 0); g.add(shd);
   }
-  // rounded shorts
-  const hips = new THREE.Mesh(new THREE.SphereGeometry(.29,14,10), ms);
-  hips.scale.set(1, .72, .82);
-  hips.position.y = .84; g.add(hips);
-  // neck + head
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(.065,.085,.14,10), mk);
-  neck.position.y = 1.55; g.add(neck);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(.16,16,12), mk);
-  head.position.y = 1.71; g.add(head);
-  // capsule-style limbs: joint cap + tapered shaft + rounded tip (hand/shoe)
-  function limb(px, py, len, r, tipR, tipMat, isFoot){
+  // shorts
+  const hips = new THREE.Mesh(new THREE.SphereGeometry(.28,14,10), ms);
+  hips.scale.set(.86, .64, .74);
+  hips.position.y = .87; g.add(hips);
+  // neck + head + hair cap for silhouette
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(.06,.08,.14,10), mk);
+  neck.position.y = 1.58; g.add(neck);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.15,16,12), mk);
+  head.position.y = 1.73; g.add(head);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(.152,14,10), mshoe);
+  hair.scale.set(.98, .78, .98);
+  hair.position.set(0, 1.78, -.025); g.add(hair);
+  // capsule-style limbs: clothed joint cap + tapered shaft + rounded tip
+  function limb(px, py, len, r, capMat, tipR, tipMat, isFoot){
     const pivot = new THREE.Group(); pivot.position.set(px, py, 0);
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(r*1.05,10,8), mk);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(r*1.18,10,8), capMat);
     pivot.add(cap);
     const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r*.7, len, 12), mk);
     m.position.y = -len/2; pivot.add(m);
@@ -721,10 +725,10 @@ function makeRig(jersey, shorts, skin, h){
     g.add(pivot);
     return pivot;
   }
-  parts.legL = limb(-.13, .78, .70, .10, .11, mshoe, true);
-  parts.legR = limb( .13, .78, .70, .10, .11, mshoe, true);
-  parts.armL = limb(-.31, 1.47, .58, .075, .08, mk, false);
-  parts.armR = limb( .31, 1.47, .58, .075, .08, mk, false);
+  parts.legL = limb(-.12, .82, .74, .095, ms, .105, mshoe, true);  // shorts at the hip
+  parts.legR = limb( .12, .82, .74, .095, ms, .105, mshoe, true);
+  parts.armL = limb(-.27, 1.50, .56, .068, mj, .075, mk, false);   // sleeve, arm hugs torso
+  parts.armR = limb( .27, 1.50, .56, .068, mj, .075, mk, false);
   parts.head = head; parts.torso = torso;
   // blob shadow
   const sh = new THREE.Mesh(new THREE.CircleGeometry(.4,14),
@@ -2302,10 +2306,19 @@ function syncRig(p, dt){
   g.rotation.x = P.gx; g.rotation.z = P.gz;
   g.scale.y = p.hScale * P.sy;
 
-  // grounded run bob — airborne arcs own their own height
-  const bob = (p.y <= .02 && !p.dunk && p.rimHangT<=0)
-    ? Math.abs(Math.sin(p.runPhase*2.2))*.05*run : 0;
+  // grounded run bob — slow lope, never on the ball handler (the camera
+  // rides him; a fast bob there reads as camera vibration)
+  const bob = (p.y <= .02 && !p.dunk && p.rimHangT<=0 && ball.holder!==p)
+    ? Math.abs(Math.sin(p.runPhase*1.05))*.035*run : 0;
   g.position.set(p.pos.x, p.y + bob, p.pos.z);
+
+  // the dribble arm pumps WITH the ball (post-blend: it must track 1:1)
+  if (ball.holder===p && ball.state==="held" && !p.dunk && p.spinT<=0 &&
+      !(G.meter.active && G.meter.shooter===p) && p.shootT<=0){
+    const pump = -(.2 + clamp(ball.pos.y - p.y - .2, 0, .85)*.75);
+    if (p.hand >= 0) parts.armR.rotation.x = pump;
+    else             parts.armL.rotation.x = pump;
+  }
 
   if (p.tag) p.tag.position.set(p.pos.x, p.y + 2.28*p.hScale, p.pos.z);
   if (p.disc) p.disc.position.set(p.pos.x, .034, p.pos.z);
