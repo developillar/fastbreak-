@@ -242,6 +242,8 @@
       <b>DUNK</b><span>with TURBO on near the rim, SHOOT turns into an amber DUNK button &#8212; instant slam, no meter</span>
       <b>SHOOT</b><span>hold + release in the green = automatic bucket &#183; defenders shrink the window &#183; dunk / layup / floater / fade picked by context</span>
       <b>PASS</b><span>tap = chest &#183; flick &#8593; lob (alley-oop!) &#183; flick &#8595; bounce</span>
+      <b>TAP MATE</b><span>tap a teammate anywhere on court &#8212; instant pass (lobs cutters automatically)</span>
+      <b>DRAW PLAY</b><span>hold a teammate + drag: he sprints the line you draw &#183; end the line at your defender = he screens there</span>
       <b>CROSS / SPIN</b><span>break your defender's ankles</span>
       <b>SCRN</b><span>call a pick &#8212; quick release: screener ROLLS to the rim (lob him!) &#183; hold: he POPS for three</span>
       <b>DEFENSE</b><span>you control the nearest man &#183; BLOCK jumps, STEAL swipes, SWAP cycles</span>
@@ -379,7 +381,7 @@ function ovrOf(p){
   return rate((a.speed+a.three+a.mid+a.close+a.dunk+a.steal+a.block+a.reb+a.pas)/9);
 }
 const SLOTS = [ [0,7.8], [-5.6,5.4], [5.6,5.4], [-6.5,1.3], [6.5,1.3] ]; // dx, dz from attacked rim toward halfcourt
-const SHOT_BASE = { DUNK:.94, LAYUP:.80, FLOATER:.64, CLOSE:.56, MID:.50, THREE:.43 };
+const SHOT_BASE = { DUNK:.94, LAYUP:.86, FLOATER:.64, CLOSE:.56, MID:.50, THREE:.43 };
 
 const DIFF = [
   {label:"ROOKIE",   timing:.74, react:1.5, aggr:.7,  pct:.78},
@@ -729,7 +731,9 @@ class Player {
     this.spinT = 0; this.cutting = false; this.cutT = 0;
     this.screenT = 0; this.screenPos = null;
     this.screenPlan = null; this.fadeT = 0; this.fadePos = null;   // pick & roll/pop
+    this.plantedT = 0;
     this.rimHangT = 0; this.hangPt = null; this.hangFall = false;  // posterize hang
+    this.cmdT = 0; this.cmdPos = null;                             // drawn-play command
     this.dunk = null; // {t,T,from,to,make,pts}
     this.seek = new THREE.Vector3();
     this.hasSeek = false;
@@ -754,6 +758,15 @@ ringUser.rotation.x = Math.PI/2; scene.add(ringUser);
 const ringBall = new THREE.Mesh(new THREE.TorusGeometry(.44,.028,8,26),
   new THREE.MeshBasicMaterial({color:0xffb545}));
 ringBall.rotation.x = Math.PI/2; scene.add(ringBall);
+
+/* drawn-play overlay: line from the commanded teammate to the drag point */
+const cmdLine = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+  new THREE.LineBasicMaterial({color:0x39d4ff, transparent:true, opacity:.95}));
+cmdLine.visible = false; scene.add(cmdLine);
+const cmdRing = new THREE.Mesh(new THREE.TorusGeometry(.42,.05,8,26),
+  new THREE.MeshBasicMaterial({color:0x39d4ff}));
+cmdRing.rotation.x = Math.PI/2; cmdRing.visible = false; scene.add(cmdRing);
 
 /* ---------------- ball ---------------- */
 function makeBallTexture(){
@@ -804,6 +817,21 @@ function slotWorld(team, si){
   const rim = rimOf(team), s = -Math.sign(rim.z); // from rim toward halfcourt
   return V(SLOTS[si][0], 0, rim.z + s*SLOTS[si][1]);
 }
+/* screen px -> point on the court plane (y=0) */
+function screenToCourt(px, py, out){
+  tmpA.set((px/VW)*2-1, -(py/VH)*2+1, .5).unproject(camera);
+  tmpA.sub(camera.position).normalize();
+  const t = -camera.position.y / (tmpA.y || -1e-6);
+  out.set(camera.position.x + tmpA.x*t, 0, camera.position.z + tmpA.z*t);
+  return out;
+}
+/* player chest -> screen px */
+function playerScreenPos(p, out){
+  tmpB.set(p.pos.x, p.y + 1.1, p.pos.z).project(camera);
+  out.x = (tmpB.x*.5+.5)*VW;
+  out.y = (-tmpB.y*.5+.5)*VH;
+  return out;
+}
 
 /* =====================================================================
    INPUT — floating joystick + thumb-arc buttons + keyboard fallback
@@ -816,9 +844,78 @@ function appPoint(e){
   const r = app.getBoundingClientRect();
   return {x: e.clientX - r.left, y: e.clientY - r.top};
 }
+/* teammate targeting: tap a mate = pass · hold + drag from a mate = draw
+   a cut (or a screen, if the line ends at your on-ball defender) */
+const TGT = {active:false, id:null, mate:null, x0:0, y0:0, t0:0, moved:false, end:new THREE.Vector3()};
+function tgtTryStart(e, pt){
+  if (TGT.active || !userHasBall() || G.phase!=="play") return false;
+  let best=null, bd=52; // px hit radius
+  const sp = {x:0, y:0};
+  for (const m of mates(G.user)){
+    playerScreenPos(m, sp);
+    const d = Math.hypot(sp.x-pt.x, sp.y-pt.y);
+    if (d<bd){ bd=d; best=m; }
+  }
+  if (!best) return false;
+  TGT.active = true; TGT.id = e.pointerId; TGT.mate = best;
+  TGT.x0 = pt.x; TGT.y0 = pt.y; TGT.t0 = performance.now(); TGT.moved = false;
+  return true;
+}
+function tgtMove(e){
+  if (!TGT.active || e.pointerId!==TGT.id) return false;
+  const pt = appPoint(e);
+  if (!TGT.moved && Math.hypot(pt.x-TGT.x0, pt.y-TGT.y0) > 22) TGT.moved = true;
+  if (TGT.moved){
+    screenToCourt(pt.x, pt.y, TGT.end);
+    TGT.end.x = clamp(TGT.end.x, -7.2, 7.2);
+    TGT.end.z = clamp(TGT.end.z, -13.6, 13.6);
+    const pos = cmdLine.geometry.attributes.position;
+    pos.setXYZ(0, TGT.mate.pos.x, .12, TGT.mate.pos.z);
+    pos.setXYZ(1, TGT.end.x, .12, TGT.end.z);
+    pos.needsUpdate = true;
+    cmdLine.visible = true;
+    cmdRing.position.set(TGT.end.x, .07, TGT.end.z);
+    cmdRing.visible = true;
+  }
+  return true;
+}
+function tgtEnd(e){
+  if (!TGT.active || e.pointerId!==TGT.id) return false;
+  TGT.active = false;
+  cmdLine.visible = false; cmdRing.visible = false;
+  const m = TGT.mate, held = performance.now() - TGT.t0;
+  if (!m || !userHasBall() || G.phase!=="play") return true;
+  if (!TGT.moved && held < 350){ userPassTo(m); return true; }
+  if (TGT.moved){
+    const {def} = nearestDefInfo(G.user);
+    if (def && dXZ(TGT.end, def.pos) < 2.4){
+      // line ends at my man: come set it right there
+      m.screenT = 2.2; m.screenPlan = "roll"; m.plantedT = 0;
+      m.screenPos = V(TGT.end.x, 0, TGT.end.z);
+      G.screener = m;
+      subBanner("SCREEN CALLED");
+    } else {
+      m.cmdT = 2.4;
+      m.cmdPos = V(TGT.end.x, 0, TGT.end.z);
+      m.cutting = false; m.fadeT = 0;
+      subBanner("CUT CALLED");
+    }
+    SFX.click();
+  }
+  return true;
+}
+function userPassTo(m){
+  if (!userHasBall() || G.phase!=="play" || !m || m.team!==0) return;
+  if (G.meter.active){ G.meter.active=false; meterHide(); }
+  const rim = rimOf(m.team);
+  const lob = m.attrs.dunk>.45 && dXZ(m.pos, rim) < 5.5 && (m.cutting || m.cmdT>0);
+  doPass(ball.holder, m, lob ? "high" : "chest");
+}
+
 app.addEventListener("pointerdown", e=>{
   if (G.phase==="menu"||G.phase==="over"||G.paused) return;
   if (e.target.closest(".abtn") || e.target.closest("#pauseBtn")) return;
+  if (tgtTryStart(e, appPoint(e))) return;   // finger landed on a teammate
   if (joy.active) return;
   const pt = appPoint(e);
   if (pt.x > VW*0.62 && pt.y > VH*0.55) return; // reserve button arc
@@ -829,6 +926,7 @@ app.addEventListener("pointerdown", e=>{
   joyStick.style.left = (pt.x-26)+"px"; joyStick.style.top = (pt.y-26)+"px";
 });
 app.addEventListener("pointermove", e=>{
+  if (tgtMove(e)) return;
   if (!joy.active || e.pointerId!==joy.id) return;
   const pt = appPoint(e);
   let dx = pt.x-joy.ox, dy = pt.y-joy.oy;
@@ -838,6 +936,7 @@ app.addEventListener("pointermove", e=>{
   joyStick.style.left = (joy.ox+dx-26)+"px"; joyStick.style.top = (joy.oy+dy-26)+"px";
 });
 function joyEnd(e){
+  if (tgtEnd(e)) return;
   if (!joy.active || e.pointerId!==joy.id) return;
   joy.active = false; joy.x = joy.y = joy.mag = 0;
   joyBase.style.display = joyStick.style.display = "none";
@@ -1109,7 +1208,7 @@ function attrFor(p, type){
   }
   return .5;
 }
-const TYPE_EASE = {DUNK:1, LAYUP:.9, FLOATER:.62, CLOSE:.65, MID:.5, THREE:.36};
+const TYPE_EASE = {DUNK:1, LAYUP:1.0, FLOATER:.62, CLOSE:.65, MID:.5, THREE:.36};
 function shotWindow(p){
   const st = decideShotType(p);
   const {def, dd} = nearestDefInfo(p);
@@ -1163,7 +1262,7 @@ function startCharge(){
   if (st.type==="DUNK"){ startDunk(G.user); return; } // dunks are instant, no meter
   const m = G.meter;
   m.active = true; m.v = 0; m.shooter = G.user;
-  m.speed = st.type==="LAYUP" ? 2.0 : 1.35;
+  m.speed = st.type==="LAYUP" ? 1.65 : 1.35;   // layup meter forgiving enough to read
   meterShow(shotWindow(G.user));
 }
 function releaseCharge(){
@@ -1406,6 +1505,7 @@ function pickPassTarget(p, dir){
     let s = open*1.15 + (dXZ(p.pos,rim)-dXZ(m.pos,rim))*.32;
     if (m.cutting) s += 1.6;
     if (m.fadeT>0) s += 1.3;   // the popper is the designed target
+    if (m.cmdT>0) s += 1.4;    // so is the man running your drawn play
     const dp = dXZ(p.pos, m.pos);
     if (dp>13) s -= (dp-13)*1.2;
     if (dp<1.5) s -= 3;
@@ -1517,8 +1617,9 @@ function userScreen(){
     if (d<bd){ bd=d; best=m; }
   }
   if (!best) return;
-  best.screenT = 2.6;
-  best.screenPlan = null;
+  best.screenT = 2.2;
+  best.screenPlan = "roll";   // rolls by default; button release may flip to fade
+  best.plantedT = 0;
   best.screenPos = V(
     def.pos.x + (u.pos.x-def.pos.x)*.4,
     0,
@@ -1770,19 +1871,31 @@ function updateAI(dt){
       }
       if (p.screenT>0 && p.screenPos){
         const d = dXZ(p.pos, p.screenPos);
-        if (d > .3){ setSeek(p, p.screenPos.x, p.screenPos.z, p.speedMax(true)); p.planted=false; }
+        if (d > .3){ setSeek(p, p.screenPos.x, p.screenPos.z, p.speedMax(true)); p.planted=false; p.plantedT=0; }
         else {
           p.hasSeek=false; p.planted=true; p.vel.multiplyScalar(.5);
-          // handler used the pick: release the screen into its roll/pop
-          const h = ball.holder;
-          if (h && h.team===p.team && h!==p && dXZ(p.pos, h.pos) < 1.05)
-            p.screenT = Math.min(p.screenT, .22);
+          p.plantedT = (p.plantedT||0) + dt;
         }
+        // release into the roll/pop the moment the handler uses the pick
+        // (even mid-route), or after a short plant — never wait out the timer
+        const h = ball.holder;
+        const used = h && h.team===p.team && h!==p && dXZ(p.pos, h.pos) < 2.0;
+        if (p.screenPlan && (used || p.plantedT > .6))
+          p.screenT = Math.min(p.screenT, .18);
         continue;
       }
       if (p.fadeT>0){         // popping to the wing after the screen
         p.fadeT -= dt;
         setSeek(p, p.fadePos.x, p.fadePos.z, p.speedMax(true));
+        continue;
+      }
+      if (p.cmdT>0){          // drawn play: sprint the line to the spot
+        p.cmdT -= dt;
+        setSeek(p, p.cmdPos.x, p.cmdPos.z, p.speedMax(true));
+        if (dXZ(p.pos, p.cmdPos) < .5){
+          p.cmdT = 0;
+          if (dXZ(p.cmdPos, rimOf(p.team)) < 5){ p.cutting = true; p.cutT = 1.0; } // finish the cut
+        }
         continue;
       }
       p.planted = false;
@@ -2302,7 +2415,7 @@ function inboundFor(t){
   for (const p of [inb, recv]){
     p.dunk = null; p.rimHangT = 0; p.y = 0; p.vy = 0;
     p.vel.set(0,0,0); p.freezeT = 0; p.cutting = false;
-    p.screenT = 0; p.screenPos = null; p.fadeT = 0;
+    p.screenT = 0; p.screenPos = null; p.fadeT = 0; p.cmdT = 0;
   }
   const side = Math.random()<.5 ? -1 : 1;
   inb.pos.set(side*1.7, 0, bz + s*1.3);
@@ -2443,6 +2556,7 @@ function placeAll(){
       p.freezeT=0; p.lungeT=0; p.shootT=0; p.spinT=0; p.screenT=0;
       p.screenPos=null; p.dunk=null; p.cutting=false; p.planted=false;
       p.screenPlan=null; p.fadeT=0; p.rimHangT=0; p.hangFall=false;
+      p.cmdT=0; p.cmdPos=null; p.plantedT=0;
       p.y=0; p.vy=0; p.vel.set(0,0,0);
       if (t===0){
         const s = slotWorld(0,i);
