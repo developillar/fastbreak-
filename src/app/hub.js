@@ -23,7 +23,7 @@ import {
   recordGame, runSimBlock, careerContext, interpolate, STORY,
 } from "../career/career.js";
 
-const APP_VERSION = "0.8.2";   // keep in sync with sw.js / version.json / footer
+const APP_VERSION = "0.8.3";   // keep in sync with sw.js / version.json / footer
 const $ = id => document.getElementById(id);
 const store = new SaveStore();
 const league = buildLeague();

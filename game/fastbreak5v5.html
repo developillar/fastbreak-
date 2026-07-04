@@ -688,23 +688,43 @@ function makeRig(jersey, shorts, skin, h){
   const mj = new THREE.MeshLambertMaterial({color:jersey});
   const ms = new THREE.MeshLambertMaterial({color:shorts});
   const mk = new THREE.MeshLambertMaterial({color:skin});
+  const mshoe = new THREE.MeshLambertMaterial({color:0x22262e});
   const parts = {};
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(.235,.27,.62,10), mj);
-  torso.position.y = 1.22; g.add(torso);
-  const hips = new THREE.Mesh(new THREE.CylinderGeometry(.27,.3,.26,10), ms);
-  hips.position.y = .83; g.add(hips);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(.155,12,10), mk);
-  head.position.y = 1.7; g.add(head);
-  function limb(px, py, len, r, mat){
+  // rounded jersey torso + shoulder caps
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(.34,16,12), mj);
+  torso.scale.set(.84, 1.02, .66);
+  torso.position.y = 1.26; g.add(torso);
+  for (const sx of [-.27, .27]){
+    const shd = new THREE.Mesh(new THREE.SphereGeometry(.105,12,9), mj);
+    shd.position.set(sx, 1.47, 0); g.add(shd);
+  }
+  // rounded shorts
+  const hips = new THREE.Mesh(new THREE.SphereGeometry(.29,14,10), ms);
+  hips.scale.set(1, .72, .82);
+  hips.position.y = .84; g.add(hips);
+  // neck + head
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(.065,.085,.14,10), mk);
+  neck.position.y = 1.55; g.add(neck);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.16,16,12), mk);
+  head.position.y = 1.71; g.add(head);
+  // capsule-style limbs: joint cap + tapered shaft + rounded tip (hand/shoe)
+  function limb(px, py, len, r, tipR, tipMat, isFoot){
     const pivot = new THREE.Group(); pivot.position.set(px, py, 0);
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r*.8, len, 8), mat);
-    m.position.y = -len/2; pivot.add(m); g.add(pivot);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(r*1.05,10,8), mk);
+    pivot.add(cap);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r*.7, len, 12), mk);
+    m.position.y = -len/2; pivot.add(m);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(tipR,10,8), tipMat||mk);
+    tip.position.y = -len;
+    if (isFoot){ tip.scale.set(1.1, .62, 1.55); tip.position.z = .05; }
+    pivot.add(tip);
+    g.add(pivot);
     return pivot;
   }
-  parts.legL = limb(-.13, .74, .68, .095, mk);
-  parts.legR = limb( .13, .74, .68, .095, mk);
-  parts.armL = limb(-.32, 1.46, .58, .07, mk);
-  parts.armR = limb( .32, 1.46, .58, .07, mk);
+  parts.legL = limb(-.13, .78, .70, .10, .11, mshoe, true);
+  parts.legR = limb( .13, .78, .70, .10, .11, mshoe, true);
+  parts.armL = limb(-.31, 1.47, .58, .075, .08, mk, false);
+  parts.armR = limb( .31, 1.47, .58, .075, .08, mk, false);
   parts.head = head; parts.torso = torso;
   // blob shadow
   const sh = new THREE.Mesh(new THREE.CircleGeometry(.4,14),
@@ -841,6 +861,7 @@ function defRimOf(team){ return RIMS[1-team]; }
 function attackDirSign(team){ return Math.sign(rimOf(team).z - 0) || (team===0?-1:1); }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
 function lerp(a,b,t){ return a+(b-a)*t; }
+function ss(t){ t = clamp(t,0,1); return t*t*(3-2*t); } // smoothstep ease
 function opps(p){ return G.teams[1-p.team]; }
 function mates(p){ return G.teams[p.team].filter(q=>q!==p); }
 function nearestOpp(p){
@@ -2185,7 +2206,6 @@ function updatePlayers(dt){
 function syncRig(p, dt){
   p.runPhase += dt * (4 + Math.hypot(p.vel.x,p.vel.z)*2.2);
   const g = p.group, parts = p.parts;
-  g.position.set(p.pos.x, p.y, p.pos.z);
   let rot = p.facing;
   if (p.spinT>0) rot += (1 - p.spinT/.48) * Math.PI*2;
   if (p.freezeT>0) rot += Math.sin(p.runPhase*3)*.12; // wobble
@@ -2195,58 +2215,98 @@ function syncRig(p, dt){
   const lfx = Math.sin(p.facing), lfz = Math.cos(p.facing);
   const fSp = p.vel.x*lfx + p.vel.z*lfz;
   const sSp = p.vel.x*lfz - p.vel.z*lfx;
-  g.rotation.x = clamp(fSp/7, -1, 1) * .17;
-  g.rotation.z = clamp(sSp/7, -1, 1) * .13;
-  let sq = 1;
-  if (p.landT>0) sq = 1 - .15*Math.sin((1 - p.landT/.32)*Math.PI);   // landing knee-bend
-  g.scale.y = p.hScale * (p.boxing ? .9 : 1) * sq;
 
   const spd = Math.hypot(p.vel.x,p.vel.z);
   const run = clamp(spd/5, 0, 1);
   const s = Math.sin(p.runPhase*2.2)*run*.7;
-  parts.legL.rotation.x = s;  parts.legL.rotation.z = p.boxing ?  .3 : 0;
-  parts.legR.rotation.x = -s; parts.legR.rotation.z = p.boxing ? -.3 : 0;
 
-  parts.armL.rotation.z = 0; parts.armR.rotation.z = 0;
+  /* ---- pose TARGETS; smoothed at the bottom so states blend, never pop ---- */
+  const T = {
+    aLx: -s*.8, aLz: 0, aRx: s*.8, aRz: 0,       // arms
+    lLx: s, lLz: 0, lRx: -s, lRz: 0,             // legs
+    gx: clamp(fSp/7,-1,1)*.17,                   // body pitch/roll
+    gz: clamp(sSp/7,-1,1)*.13,
+    sy: 1,                                       // squash & stretch
+  };
+  if (p.landT>0) T.sy = 1 - .16*Math.sin((1 - p.landT/.32)*Math.PI);  // landing squash
+  else if (p.y>0.02) T.sy = clamp(1 + p.vy*.02, .9, 1.12);            // airborne stretch
+  if (p.boxing) T.sy *= .9;
+
+  let fast = false;   // airborne set-pieces track their arcs tightly
   if (p.rimHangT>0){
-    // gripping the rim, body swinging under it
-    parts.armL.rotation.x = -2.95; parts.armR.rotation.x = -2.95;
-    parts.armL.rotation.z = .16;   parts.armR.rotation.z = -.16;
+    fast = true;
     const sw = Math.sin(p.runPhase*2.4)*.3;
-    parts.legL.rotation.x = .3 + sw; parts.legR.rotation.x = .3 - sw;
-    g.rotation.x = .12 + sw*.25;
+    T.aLx = -2.95; T.aRx = -2.95; T.aLz = .16; T.aRz = -.16;
+    T.lLx = .3 + sw; T.lRx = .3 - sw;
+    T.gx = .12 + sw*.25; T.sy = 1.05;
   } else if (p.dunk){
+    fast = true;
     const dph = Math.min(1, p.dunk.t/p.dunk.T);
     if (p.dunk.mode==="dunk"){
-      // cock back, then throw it down
-      const lead = dph<.55 ? lerp(-1.0, -3.1, dph/.55) : lerp(-3.1, -.5, Math.min(1,(dph-.55)/.3));
-      parts.armR.rotation.x = lead;
-      parts.armL.rotation.x = -1.4; parts.armL.rotation.z = .55;
-      parts.legL.rotation.x = -1.0*Math.sin(dph*Math.PI);   // knees tucked
-      parts.legR.rotation.x = -.45*Math.sin(dph*Math.PI);
-      g.rotation.x = dph<.55 ? -.14 : lerp(-.14, .26, Math.min(1,(dph-.55)/.3)); // lean back, pike over
+      // cock back, hammer down — eased inside each beat
+      const lead = dph<.55 ? lerp(-.9, -3.1, ss(dph/.55)) : lerp(-3.1, -.4, ss((dph-.55)/.3));
+      T.aRx = lead; T.aRz = -.1;
+      T.aLx = -1.5; T.aLz = .5;
+      T.lLx = -1.05*Math.sin(dph*Math.PI); T.lRx = -.5*Math.sin(dph*Math.PI);
+      T.lLz = .12; T.lRz = -.12;
+      T.gx = dph<.55 ? -.16 : lerp(-.16, .28, ss((dph-.55)/.3));
+      T.sy = 1 + .1*Math.sin(dph*Math.PI);
     } else {
-      // layup: knee drive + full extension to the glass
-      const ext = Math.min(1, dph/.55);
-      parts.armR.rotation.x = lerp(-.6, -2.95, ext) + (dph>.7 ? (dph-.7)*1.8 : 0);
-      parts.armL.rotation.x = -.4;
-      parts.legL.rotation.x = -1.2*Math.sin(Math.min(1, dph*1.25)*Math.PI);
-      parts.legR.rotation.x = .35*Math.sin(dph*Math.PI);
-      g.rotation.x = .07;
+      // layup: knee drive, full extension, soft wrist at the glass
+      const ext = ss(Math.min(1, dph/.55));
+      T.aRx = lerp(-.5, -3.0, ext) + (dph>.7 ? (dph-.7)*1.6 : 0);
+      T.aLx = -.5; T.aLz = .25;
+      T.lLx = -1.25*Math.sin(Math.min(1, dph*1.25)*Math.PI);
+      T.lRx = .4*Math.sin(dph*Math.PI);
+      T.gx = .07;
+      T.sy = 1 + .08*Math.sin(dph*Math.PI);
     }
-  } else if (p.shootT>0 || p.jumpArms>0){
-    parts.armL.rotation.x = -2.7; parts.armR.rotation.x = -2.7;
+  } else if (p.shootT>0){
+    // jump shot: gather -> extend & release at the top -> follow-through
+    const ph = 1 - p.shootT/.95;
+    let a;
+    if (ph < .22)      a = lerp(-1.0, -2.45, ss(ph/.22));
+    else if (ph < .48) a = lerp(-2.45, -3.08, ss((ph-.22)/.26));
+    else               a = lerp(-3.08, -2.55, ss((ph-.48)/.52));
+    T.aRx = a; T.aRz = -.14;
+    T.aLx = a*.85; T.aLz = .2;
+    const tuck = Math.sin(Math.min(1, ph*1.4)*Math.PI);
+    T.lLx = -.3*tuck; T.lRx = .42*tuck;      // legs stagger in the air
+    T.gx = -.05 + ph*.1;
+  } else if (p.jumpArms>0){
+    T.aLx = -2.85; T.aRx = -2.85; T.aLz = .12; T.aRz = -.12;
   } else if (p.boxing){
-    parts.armL.rotation.x = -.35; parts.armR.rotation.x = -.35;
-    parts.armL.rotation.z = 1.0;  parts.armR.rotation.z = -1.0;  // arms wide, body on a body
+    T.aLx = -.35; T.aRx = -.35; T.aLz = 1.0; T.aRz = -1.0;  // arms wide
+    T.lLz = .3; T.lRz = -.3;
   } else if (p.planted){
-    parts.armL.rotation.x = -.7; parts.armR.rotation.x = -.7;
+    T.aLx = -.7; T.aRx = -.7; T.aLz = .35; T.aRz = -.35;
+  } else if (G.meter.active && G.meter.shooter===p){
+    // charging: crouch and gather — the spring loads before the jumper
+    T.aLx = -1.9; T.aRx = -2.1; T.aLz = .15; T.aRz = -.15;
+    T.lLx = .2; T.lRx = .2;
+    T.sy = .93;
   } else if (ball.holder===p){
     const low = Math.abs(p.hand)<.6 ? -.25 : 0;
-    parts.armL.rotation.x = -.5+low; parts.armR.rotation.x = -.9+low;
-  } else {
-    parts.armL.rotation.x = -s*.8; parts.armR.rotation.x = s*.8;
+    T.aLx = -.5+low; T.aRx = -.9+low;
   }
+
+  /* ---- exponential pose blending: the Mario smoothness ---- */
+  if (!p.pose) p.pose = {...T};
+  const k = 1 - Math.exp(-(fast ? 26 : 14)*dt);
+  const P = p.pose;
+  for (const key in T) P[key] += (T[key]-P[key])*k;
+  parts.armL.rotation.x = P.aLx; parts.armL.rotation.z = P.aLz;
+  parts.armR.rotation.x = P.aRx; parts.armR.rotation.z = P.aRz;
+  parts.legL.rotation.x = P.lLx; parts.legL.rotation.z = P.lLz;
+  parts.legR.rotation.x = P.lRx; parts.legR.rotation.z = P.lRz;
+  g.rotation.x = P.gx; g.rotation.z = P.gz;
+  g.scale.y = p.hScale * P.sy;
+
+  // grounded run bob — airborne arcs own their own height
+  const bob = (p.y <= .02 && !p.dunk && p.rimHangT<=0)
+    ? Math.abs(Math.sin(p.runPhase*2.2))*.05*run : 0;
+  g.position.set(p.pos.x, p.y + bob, p.pos.z);
+
   if (p.tag) p.tag.position.set(p.pos.x, p.y + 2.28*p.hScale, p.pos.z);
   if (p.disc) p.disc.position.set(p.pos.x, .034, p.pos.z);
   parts.shadow.position.set(p.pos.x, .02, p.pos.z);
