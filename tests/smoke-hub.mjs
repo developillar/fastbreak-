@@ -101,6 +101,20 @@ try {
   check("career progress persists across reload", (await page.textContent("#carChapter")).includes("CH 1"));
   await page.click("#btnCareerBack");
 
+  /* ---- The Park: run a court, rep climbs, streak shows ---- */
+  await page.click("#btnPark");
+  await page.waitForSelector("#viewPark:not(.hidden)");
+  check("park opens with the rep ladder", (await page.textContent("#parkTier")).includes("REP"));
+  await page.click('[data-run="cage"]');
+  await page.waitForSelector("#viewResult:not(.hidden)");
+  await page.click("#btnResBack");
+  await page.waitForSelector("#viewPark:not(.hidden)");
+  const parkStats = await page.textContent("#parkStats");
+  check("park game recorded", /1W|0W — 1L|1W — 0L/.test(parkStats), parkStats);
+  const rep = await page.textContent("#parkTier");
+  check("rep was earned", !rep.includes("· 0 REP"), rep);
+  await page.click("#btnParkBack");
+
   /* ---- in-app save reset ---- */
   page.on("dialog", d => d.accept());
   await page.click("#btnReset");

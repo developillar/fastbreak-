@@ -2,7 +2,7 @@
    Bump VERSION on every deploy that changes any precached file. */
 /* KEEP IN SYNC (tests/version.test.mjs enforces): sw.js VERSION,
    version.json, index.html footer tag, hub.js APP_VERSION */
-const VERSION = "fb5-v0.8.4";
+const VERSION = "fb5-v0.9.0";
 const PRECACHE = [
   "./",
   "./index.html",
@@ -21,6 +21,7 @@ const PRECACHE = [
   "./src/player/myplayer.js",
   "./src/save/store.js",
   "./src/career/story.js",
+  "./src/park/park.js",
   "./src/career/career.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

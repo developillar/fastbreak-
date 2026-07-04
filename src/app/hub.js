@@ -22,8 +22,12 @@ import {
   startCareer, currentEvent, completeScene, careerGameConfig,
   recordGame, runSimBlock, careerContext, interpolate, STORY,
 } from "../career/career.js";
+import {
+  COURTS, courtById, parkGameConfig, recordParkGame, ensurePark,
+  tierOf, tierProgress, PARK_TIERS,
+} from "../park/park.js";
 
-const APP_VERSION = "0.8.4";   // keep in sync with sw.js / version.json / footer
+const APP_VERSION = "0.9.0";   // keep in sync with sw.js / version.json / footer
 const $ = id => document.getElementById(id);
 const store = new SaveStore();
 const league = buildLeague();
@@ -91,7 +95,7 @@ function forceRefresh(v) {
 }
 
 /* ---------------- views ---------------- */
-const VIEWS = ["viewHome", "viewCreate", "viewUpgrade", "viewBadges", "viewResult", "viewCareer", "viewCutscene"];
+const VIEWS = ["viewHome", "viewCreate", "viewUpgrade", "viewBadges", "viewResult", "viewCareer", "viewCutscene", "viewPark"];
 let resultReturnView = "viewHome";   // where BACK on the result screen goes
 function show(view) {
   for (const v of VIEWS) $(v).classList.toggle("hidden", v !== view);
@@ -113,10 +117,13 @@ function wireHome() {
   $("btnBadgeBack")?.addEventListener("click", () => { renderHome(); show("viewHome"); });
   $("btnResBack")?.addEventListener("click", () => {
     if (resultReturnView === "viewCareer" && save.career) { renderCareer(); show("viewCareer"); }
+    else if (resultReturnView === "viewPark" && save.park) { renderPark(); show("viewPark"); }
     else { renderHome(); show("viewHome"); }
   });
   $("btnCareer")?.addEventListener("click", openCareer);
   $("btnCareerBack")?.addEventListener("click", () => { renderHome(); show("viewHome"); });
+  $("btnPark")?.addEventListener("click", openPark);
+  $("btnParkBack")?.addEventListener("click", () => { renderHome(); show("viewHome"); });
   $("btnPlay")?.addEventListener("click", () => launchPlayable(false));
   $("btnClassic")?.addEventListener("click", () => launchPlayable(true));
   $("btnSim")?.addEventListener("click", runSim);
@@ -141,6 +148,13 @@ function renderHome() {
     $("careerSub").textContent = cur.done
       ? "LEGACY SEALED · " + save.career.record.w + "W " + save.career.record.l + "L"
       : cur.chapter.title + " · " + save.career.record.w + "W " + save.career.record.l + "L";
+  }
+  if (save.park && $("parkPill")) {
+    const pk = save.park;
+    $("parkPill").textContent = tierOf(pk.rep || 0).id;
+    if (pk.games) $("parkSub").textContent =
+      (pk.rep|0) + " REP · " + pk.wins + "W " + (pk.games - pk.wins) + "L" +
+      (pk.streak > 1 ? " · " + pk.streak + " STRAIGHT" : "");
   }
   if (mp) {
     $("mpName").textContent = mp.name;
@@ -331,6 +345,19 @@ function consumePlayableResult() {
   try {
     const result = JSON.parse(raw);
     validateMatchResult(result);
+    if (save.park?.pending) {
+      // returning from a playable park run
+      const courtId = save.park.pending;
+      save.park.pending = null;
+      const r = recordParkGame(save, result, courtId, { played: true });
+      store.save(save);
+      toast((r.won ? "HELD COURT +" : "RAN OFF +") + r.gain + " REP" +
+        (r.tierUp ? " · " + tierOf(save.park.rep).label + "!" : ""));
+      resultReturnView = "viewPark";
+      renderResult(result);
+      show("viewResult");
+      return;
+    }
     const careerCur = save.career?.pending ? currentEvent(save.career) : null;
     if (careerCur && !careerCur.done && careerCur.event.type === "game") {
       // returning from a career key game: record into the story
@@ -512,6 +539,68 @@ function simCareerGame() {
   resultReturnView = "viewCareer";
   renderResult(result);
   show("viewResult");
+}
+
+/* =========================================================================
+   THE PARK — court-select hub, rep ladder, BotProvider runs
+   ========================================================================= */
+function openPark() {
+  if (!save.myPlayer) { toast("CREATE A MYPLAYER FIRST"); return; }
+  ensurePark(save);
+  store.save(save);
+  renderPark();
+  show("viewPark");
+}
+
+function renderPark() {
+  const pk = ensurePark(save);
+  const prog = tierProgress(pk.rep);
+  $("parkTier").textContent = prog.cur.label + " · " + pk.rep + " REP";
+  $("parkRepFill").style.width = (prog.frac * 100).toFixed(1) + "%";
+  $("parkStats").innerHTML =
+    `<b>${pk.wins}W — ${pk.games - pk.wins}L</b>` +
+    (pk.streak > 1 ? ` · <span class="flame">🔥 ${pk.streak} STRAIGHT</span>` : "") +
+    (pk.bestStreak > 1 ? ` · BEST RUN <b>${pk.bestStreak}</b>` : "") +
+    (prog.next ? ` · NEXT: ${prog.next.label} AT ${prog.next.at}` : " · TOP OF THE LADDER");
+
+  $("parkCourts").innerHTML = COURTS.map(c => `
+    <div class="courtcard">
+      <div class="cmode">${c.mode} · ${c.court === "half" ? "HALF COURT" : "FULL COURT"} · +${c.repWin} REP</div>
+      <div class="ctitle">${c.label}</div>
+      <div class="cblurb">${c.blurb}</div>
+      <div class="evbtns">
+        ${c.playable
+          ? `<div class="bigbtn" data-play="${c.id}">PLAY ›</div><div class="bigbtn alt" data-run="${c.id}">SIM</div>`
+          : `<div class="bigbtn" data-run="${c.id}">RUN IT ›</div>`}
+      </div>
+    </div>`).join("");
+  $("parkCourts").querySelectorAll("[data-run]").forEach(el =>
+    el.addEventListener("click", () => runParkGame(el.dataset.run)));
+  $("parkCourts").querySelectorAll("[data-play]").forEach(el =>
+    el.addEventListener("click", () => launchParkGame(el.dataset.play)));
+}
+
+function runParkGame(courtId) {
+  const cfg = parkGameConfig(save, league, courtId);
+  const result = simulate(cfg);
+  const r = recordParkGame(save, result, courtId, { played: false });
+  store.save(save);
+  toast((r.won ? "HELD COURT +" : "RAN OFF +") + r.gain + " REP" +
+    (r.tierUp ? " · " + tierOf(save.park.rep).label + "!" : ""));
+  resultReturnView = "viewPark";
+  renderResult(result);
+  show("viewResult");
+}
+
+function launchParkGame(courtId) {
+  const cfg = parkGameConfig(save, league, courtId);
+  cfg.meta.returnUrl = "../index.html";
+  save.park.pending = courtId;
+  store.save(save).then(() => {
+    sessionStorage.setItem("fb5.matchConfig", JSON.stringify(cfg));
+    sessionStorage.removeItem("fb5.matchResult");
+    location.href = "game/fastbreak5v5.html";
+  });
 }
 
 /* ---------------- result view ---------------- */

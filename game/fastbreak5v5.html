@@ -788,6 +788,7 @@ class Player {
     this.cd = {cross:0, spin:0, euro:0, step:0, steal:0, ai:Math.random()*.3, cut:3+Math.random()*4, block:0};
     this.spinT = 0; this.cutting = false; this.cutT = 0;
     this.euroT = 0; this.euroSgn = 1; this.euroBoost = 0; this.stepBoost = 0;
+    this.crossT = 0; this.crossSgn = 1;
     this.screenT = 0; this.screenPos = null;
     this.screenPlan = null; this.fadeT = 0; this.fadePos = null;   // pick & roll/pop
     this.plantedT = 0;
@@ -1631,12 +1632,13 @@ function dribbleMove(p, kind){
   const fwd = tmpA.subVectors(rim, p.pos); fwd.y=0; fwd.normalize();
   const side = tmpB.set(fwd.z, 0, -fwd.x);
   if (kind==="cross"){
-    if (p.cd.cross>0) return; p.cd.cross = 1.1;
+    // Iverson: rock them to sleep one way, snap low across, GONE the other
+    if (p.cd.cross>0) return; p.cd.cross = 1.15;
     const sgn = (p===G.user && joy.mag>.2) ? Math.sign(joy.x||1) : (Math.random()<.5?-1:1);
-    p.vel.addScaledVector(side, 8.2*sgn).addScaledVector(fwd, 2.6);
-    p.vel.clampLength(0, 9.2);
-    p.burstT = .55;
-    p.handTarget = -(p.handTarget||1); // ball whips across the body
+    p.crossSgn = sgn;
+    p.crossT = .38;              // beat 1 sells the fake, beat 2 explodes
+    p.burstT = .5;
+    p.hand = -sgn; p.handTarget = sgn;
   } else if (kind==="euro"){
     // two beats: hard step one way, harder step back the other, downhill
     if (p.cd.euro>0 || dXZ(p.pos, rim) > 8.5) return; p.cd.euro = 1.7;
@@ -2082,6 +2084,7 @@ function updatePlayers(dt){
     // timers
     for (const k of ["cross","spin","euro","step","steal","block"]) if (p.cd[k]>0) p.cd[k]-=dt;
     if (p.euroT>0) p.euroT-=dt;
+    if (p.crossT>0){ p.crossT-=dt; if (p.crossT<=0) p.hand = p.crossSgn; }
     if (p.euroBoost>0) p.euroBoost-=dt;
     if (p.stepBoost>0) p.stepBoost-=dt;
     if (p.freezeT>0){ p.freezeT-=dt; if (p.freezeT<=0) p.recoverT = .5; }
@@ -2112,7 +2115,17 @@ function updatePlayers(dt){
 
     // ---- desired velocity ----
     let dvx = 0, dvz = 0;
-    if (p.euroT>0){
+    if (p.crossT>0){
+      // crossover: small rock toward the fake side, then a violent snap back
+      tmpA.subVectors(rimOf(p.team), p.pos); tmpA.y=0; tmpA.normalize();
+      const sx = tmpA.z, sz = -tmpA.x;
+      const sell = p.crossT > .24;
+      const lat = sell ? -3.4*p.crossSgn : 9.4*p.crossSgn;
+      const fw  = sell ? .5 : 3.0;
+      dvx = tmpA.x*fw + sx*lat;
+      dvz = tmpA.z*fw + sz*lat;
+    }
+    else if (p.euroT>0){
       // euro step: scripted two-beat zig-zag toward the rim, no steering
       tmpA.subVectors(rimOf(p.team), p.pos); tmpA.y=0; tmpA.normalize();
       const sx = tmpA.z, sz = -tmpA.x;
@@ -2284,6 +2297,13 @@ function syncRig(p, dt){
     T.lLz = .3; T.lRz = -.3;
   } else if (p.planted){
     T.aLx = -.7; T.aRx = -.7; T.aLz = .35; T.aRz = -.35;
+  } else if (p.crossT>0){
+    // deep shoulder dip, low center of gravity, arms wide and loose
+    fast = true;
+    T.gz = clamp(T.gz*2.3, -.4, .4);
+    T.gx = .13;
+    T.sy = .9;
+    T.aLx = -.3; T.aRx = -.3; T.aLz = .28; T.aRz = -.28;
   } else if (G.meter.active && G.meter.shooter===p){
     // charging: crouch and gather — the spring loads before the jumper
     T.aLx = -1.9; T.aRx = -2.1; T.aLz = .15; T.aRz = -.15;
@@ -2313,7 +2333,7 @@ function syncRig(p, dt){
   g.position.set(p.pos.x, p.y + bob, p.pos.z);
 
   // the dribble arm pumps WITH the ball (post-blend: it must track 1:1)
-  if (ball.holder===p && ball.state==="held" && !p.dunk && p.spinT<=0 &&
+  if (ball.holder===p && ball.state==="held" && !p.dunk && p.spinT<=0 && p.crossT<=0 &&
       !(G.meter.active && G.meter.shooter===p) && p.shootT<=0){
     const pump = -(.2 + clamp(ball.pos.y - p.y - .2, 0, .85)*.75);
     if (p.hand >= 0) parts.armR.rotation.x = pump;
@@ -2348,6 +2368,16 @@ function updateBall(dt){
       if (h.spinT > 0){
         const a = h.facing + (1 - h.spinT/.48)*Math.PI*2;
         ball.pos.set(h.pos.x + Math.cos(a)*.44, .95 + h.y, h.pos.z - Math.sin(a)*.44);
+        break;
+      }
+      // crossover: the ball swings WIDE and dips LOW across the body
+      if (h.crossT > 0){
+        const u = ss(1 - h.crossT/.38);
+        const off = lerp(-h.crossSgn*.58, h.crossSgn*.52, u);
+        const by = .58 - .34*Math.sin(Math.PI*u);          // lowest mid-whip
+        ball.pos.set(h.pos.x + rx*off + fx*.24, by + h.y, h.pos.z + rz*off + fz*.24);
+        if (u > .5 && !h.crossSfx){ h.crossSfx = true; SFX.bounce(); }
+        if (u <= .5) h.crossSfx = false;
         break;
       }
       // dribble rhythm: work the ball between hands when sizing a defender up
@@ -2719,7 +2749,7 @@ function placeAll(){
       p.screenPos=null; p.dunk=null; p.cutting=false; p.planted=false;
       p.screenPlan=null; p.fadeT=0; p.rimHangT=0; p.hangFall=false;
       p.cmdT=0; p.cmdPos=null; p.plantedT=0;
-      p.euroT=0; p.euroBoost=0; p.stepBoost=0;
+      p.euroT=0; p.euroBoost=0; p.stepBoost=0; p.crossT=0;
       p.y=0; p.vy=0; p.vel.set(0,0,0);
       if (t===0){
         const s = slotWorld(0,i);

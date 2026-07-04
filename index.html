@@ -264,6 +264,24 @@
     padding:5px 0;border-bottom:1px solid rgba(120,160,255,.07)}
   .hrow b{color:var(--txt)} .hrow .gpos{color:var(--good)} .hrow .gneg{color:#ff8d84}
 
+  /* ================= the park ================= */
+  #parkPanel::before{background:linear-gradient(180deg,var(--amber),#ff7a3c)}
+  .repbar{height:8px;background:#0a0f1d;border:1px solid var(--line);margin:4px 0 10px;
+    clip-path:polygon(3px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 3px)}
+  .repbar i{display:block;height:100%;background:linear-gradient(90deg,var(--amber),#ff7a3c);
+    transition:width .4s cubic-bezier(.2,.9,.3,1)}
+  #parkStats{font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--dim)}
+  #parkStats b{color:var(--txt)}
+  #parkStats .flame{color:var(--amber)}
+  .courtcard{position:relative;border:1px solid rgba(255,181,69,.3);margin:10px 0;padding:15px 16px 13px 20px;
+    background:linear-gradient(160deg,#241a0d,#0b101f 75%);
+    clip-path:polygon(10px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 10px)}
+  .courtcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--amber)}
+  .courtcard .cmode{font-size:8.5px;font-weight:800;letter-spacing:.3em;color:var(--amber);margin-bottom:4px}
+  .courtcard .ctitle{font-family:var(--cond);font-weight:900;font-style:italic;font-size:23px;line-height:1}
+  .courtcard .cblurb{font-size:10px;font-weight:600;color:var(--dim);margin-top:6px;line-height:1.5}
+  .courtcard .evbtns{margin-top:11px}
+
   /* ================= cutscene player ================= */
   #viewCutscene{position:fixed;inset:0;z-index:30;background:#000;cursor:pointer}
   #viewCutscene::before,#viewCutscene::after{content:"";position:absolute;left:0;right:0;height:11vh;z-index:2;background:#000}
@@ -385,20 +403,20 @@
       <div class="chev" style="color:var(--good)">›</div>
     </div>
 
-    <div class="tile locked">
-      <div class="edge"></div>
+    <div class="tile" id="btnPark">
+      <div class="edge" style="background:var(--amber)"></div>
       <div class="tin">
-        <div class="tlab">THE PARK <span class="pill off">SOON</span></div>
-        <div class="tsub">1v1 · 3v3 · 21 · REP LADDER</div>
+        <div class="tlab">THE PARK <span class="pill warn" id="parkPill">REP</span></div>
+        <div class="tsub" id="parkSub">1v1 · 2v2 · 3v3 · FULL RUNS · REP LADDER</div>
       </div>
-      <div class="chev">›</div>
+      <div class="chev" style="color:var(--amber)">›</div>
     </div>
 
     <div class="rowlink" id="btnClassic">CLASSIC 5v5 — NO MYPLAYER ›</div>
     <div class="rowlink" id="btnReset" style="color:#7a4046">RESET SAVE DATA</div>
 
     <div class="foot">ENGINE-AS-SERVICE · ONE SAVE BLOB · PWA<br>NO PAY-TO-WIN. EVER.<br>
-      <span id="verTag" style="color:#4a5878">V0.8.4</span></div>
+      <span id="verTag" style="color:#4a5878">V0.9.0</span></div>
   </div>
 
   <!-- ============ CREATE ============ -->
@@ -464,6 +482,17 @@
       <div id="carHistory"></div>
     </div>
     <div class="backbtn" id="btnCareerBack">‹ LOCKER ROOM</div>
+  </div>
+
+  <!-- ============ THE PARK ============ -->
+  <div id="viewPark" class="view hidden">
+    <div class="panel" id="parkPanel">
+      <div class="ptitle">THE PARK <span class="balance" style="color:var(--amber)" id="parkTier"></span></div>
+      <div class="repbar"><i id="parkRepFill"></i></div>
+      <div id="parkStats"></div>
+    </div>
+    <div id="parkCourts"></div>
+    <div class="backbtn" id="btnParkBack">‹ LOCKER ROOM</div>
   </div>
 
   <!-- ============ CUTSCENE (letterboxed player) ============ -->
