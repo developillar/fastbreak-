@@ -441,6 +441,34 @@ function resize(){
 window.addEventListener("resize", resize);
 resize();
 
+/* ---- iOS zoom hardening ----
+   Safari ignores user-scalable=no: rapid taps double-tap-zoom the page and
+   touch-action:none then blocks the pinch to undo it. All game UI runs on
+   pointer events (never click), so eating the second touchend is safe. */
+for (const ev of ["gesturestart","gesturechange","gestureend"])
+  document.addEventListener(ev, e=>e.preventDefault(), {passive:false});
+let lastTouchEnd = 0;
+document.addEventListener("touchend", e=>{
+  const tag = e.target && e.target.tagName;
+  if (tag==="INPUT" || tag==="TEXTAREA") return;
+  const now = performance.now();
+  if (now - lastTouchEnd < 330) e.preventDefault();  // second tap of a double-tap
+  lastTouchEnd = now;
+}, {passive:false});
+{
+  // arrive zoomed (e.g. from a pre-fix session)? snap the scale back to 1
+  const vp = document.querySelector('meta[name="viewport"]');
+  if (vp){
+    const base = vp.getAttribute("content");
+    const snap = ()=>{
+      vp.setAttribute("content", base.replace("maximum-scale=1.0", "maximum-scale=1.0001"));
+      setTimeout(()=>vp.setAttribute("content", base), 40);
+    };
+    window.addEventListener("pageshow", snap);
+    snap();
+  }
+}
+
 /* ---------------- court ---------------- */
 function makeCourtTexture(keyCss){
   const cw = 512, ch = 1024, c = document.createElement("canvas");
