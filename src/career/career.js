@@ -207,7 +207,7 @@ export function careerGameConfig(save, league) {
     seed: hashSeed(c.seed + ":" + ev.id + ":" + c.attempt),
     home, away,
     difficulty: ev.difficulty ?? 1,
-    rules: { quarterLength: 120 },
+    rules: { quarterLength: save.settings?.qlen || 120 },
     myPlayer: { side: "home", index: slot },
     objectives: ev.objectives || [],
     meta: { label: ev.label + (ev.opponent === "rival" ? " vs " + RIVAL.name : ""), career: true,

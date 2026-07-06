@@ -30,7 +30,7 @@ import {
   tierOf, tierProgress, PARK_TIERS,
 } from "../park/park.js";
 
-const APP_VERSION = "0.11.1";   // keep in sync with sw.js / version.json / footer
+const APP_VERSION = "0.12.0";   // keep in sync with sw.js / version.json / footer
 const $ = id => document.getElementById(id);
 const store = new SaveStore();
 const league = buildLeague();
@@ -98,7 +98,7 @@ function forceRefresh(v) {
 }
 
 /* ---------------- views ---------------- */
-const VIEWS = ["viewHome", "viewCreate", "viewUpgrade", "viewBadges", "viewResult", "viewCareer", "viewCutscene", "viewPark"];
+const VIEWS = ["viewHome", "viewCreate", "viewUpgrade", "viewBadges", "viewResult", "viewCareer", "viewCutscene", "viewPark", "viewSettings"];
 let resultReturnView = "viewHome";   // where BACK on the result screen goes
 function show(view) {
   for (const v of VIEWS) $(v).classList.toggle("hidden", v !== view);
@@ -130,6 +130,8 @@ function wireHome() {
   $("btnPlay")?.addEventListener("click", () => launchPlayable(false));
   $("btnClassic")?.addEventListener("click", () => launchPlayable(true));
   $("btnSim")?.addEventListener("click", runSim);
+  $("btnSettings")?.addEventListener("click", () => { renderSettings(); show("viewSettings"); });
+  $("btnSetBack")?.addEventListener("click", () => { renderHome(); show("viewHome"); });
   $("btnReset")?.addEventListener("click", async () => {
     if (!confirm("Delete your MyPlayer and ALL progress? This cannot be undone.")) return;
     save = await store.reset();
@@ -355,6 +357,28 @@ function nextConfig({ classic = false } = {}) {
   });
 }
 
+/* ---------------- settings ---------------- */
+const QLEN_OPTS = [[60, "1:00"], [120, "2:00"], [180, "3:00"], [300, "5:00"]];
+const DIFF_OPTS = [[0, "ROOKIE"], [1, "PRO"], [2, "ALL-STAR"]];
+function renderSettings() {
+  save.settings = save.settings || {};
+  const qlen = save.settings.qlen ?? 120;
+  const diff = save.settings.diff ?? 1;
+  const seg = (elId, opts, cur, key) => {
+    const el = $(elId);
+    if (!el) return;
+    el.innerHTML = opts.map(([v, label]) =>
+      `<div data-v="${v}" class="${v === cur ? "on" : ""}">${label}</div>`).join("");
+    el.querySelectorAll("div").forEach(d => d.addEventListener("click", () => {
+      save.settings[key] = +d.dataset.v;
+      store.save(save);
+      renderSettings();
+    }));
+  };
+  seg("setQlen", QLEN_OPTS, qlen, "qlen");
+  seg("setDiff", DIFF_OPTS, diff, "diff");
+}
+
 /* ---------------- playable engine launch/return ---------------- */
 function launchPlayable(classic) {
   if (!classic && !save.myPlayer) { toast("CREATE A MYPLAYER FIRST (OR PLAY CLASSIC)"); return; }
@@ -371,7 +395,16 @@ function launchPlayable(classic) {
 
 function consumePlayableResult() {
   const raw = sessionStorage.getItem("fb5.matchResult");
-  if (!raw) return;
+  if (!raw) {
+    // back with no result (quit mid-game / crash): drop stale round-trip
+    // flags so the next unrelated match can't be recorded as park/career
+    if (save.park?.pending || save.career?.pending) {
+      if (save.park) save.park.pending = null;
+      if (save.career) save.career.pending = null;
+      store.save(save);
+    }
+    return;
+  }
   sessionStorage.removeItem("fb5.matchResult");
   sessionStorage.removeItem("fb5.matchConfig");
   try {

@@ -317,7 +317,9 @@
   <div class="overlay hidden" id="paused">
     <div class="ttl">PAUSED</div>
     <div class="go" id="resumeBtn">RESUME</div>
+    <div class="go alt" id="simEndBtn">SIM TO END</div>
     <div class="go alt" id="editorBtn2">ROSTERS</div>
+    <div class="go alt" id="quitBtn" style="border-color:rgba(255,84,73,.4);color:#ff8d84">QUIT</div>
   </div>
 </div>
 <script src="../vendor/three.r128.min.js"></script>
@@ -339,6 +341,9 @@ const Q_LEN = 120;
    (no bridge) the game behaves exactly as it always did. */
 let AUTOPLAY = false;          // both teams CPU-driven (headless verification)
 let TIMESCALE = 1;             // >1 only for automated smoke tests
+let BRIDGE = null;             // the active MatchConfig when bridged (module sets it)
+let LOCKED = null;             // MyCareer: control is locked to this player
+let MUTE = false;              // silences the synth (sim-to-end fast-forward)
 const MSTAT = {                // per-player box score -> MatchResult
   on: true, clock: 0, p0: 0, p1: 0,
   lines: new Map(), highlights: [], periods: [],
@@ -1464,6 +1469,13 @@ bindBtn("bDunk", ()=>userDunk());
 bindBtn("bPass", null, (dy)=>{
   let type = "chest";
   if (dy < -26) type = "high"; else if (dy > 26) type = "bounce";
+  // locked to your MyPlayer and off-ball? PASS calls for the rock
+  if (LOCKED && !userHasBall() && G.phase==="play" && ball.state==="held" &&
+      ball.holder && ball.holder.team===0 && ball.holder!==LOCKED){
+    doPass(ball.holder, LOCKED, "chest");
+    subBanner("BALL CALLED");
+    return;
+  }
   userPass(type);
 });
 /* CROSS/SPIN are flick-aware: tap = the classic move, flick ↓ on CROSS =
@@ -1564,7 +1576,7 @@ function subBanner(txt){
 let AC = null;
 function audio(){ if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==="suspended")AC.resume(); return AC; }
 function tone(freq, dur, type, gain, slide){
-  const ac = AC; if(!ac) return;
+  const ac = AC; if(!ac || MUTE) return;
   const o = ac.createOscillator(), g = ac.createGain();
   o.type = type||"sine"; o.frequency.value = freq;
   if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+slide), ac.currentTime+dur);
@@ -1574,7 +1586,7 @@ function tone(freq, dur, type, gain, slide){
   o.start(); o.stop(ac.currentTime+dur+.02);
 }
 function noise(dur, gain, freq, type){
-  const ac = AC; if(!ac) return;
+  const ac = AC; if(!ac || MUTE) return;
   const n = Math.floor(ac.sampleRate*dur), buf = ac.createBuffer(1,n,ac.sampleRate);
   const d = buf.getChannelData(0);
   for(let i=0;i<n;i++) d[i] = (Math.random()*2-1)*(1-i/n);
@@ -2967,6 +2979,7 @@ function syncBallMesh(dt){
    CONTROL SWITCHING / BUTTON CLUSTERS
    ===================================================================== */
 function manualSwitch(){
+  if (LOCKED) return;                       // MyCareer: you ARE your player
   if (G.phase!=="play" || G.poss===0 || !G.user) return;
   const target = ball.holder ? ball.holder.pos : ball.pos;
   const sorted = G.teams[0].slice().sort((a,b)=>dXZ(a.pos,target)-dXZ(b.pos,target));
@@ -2977,6 +2990,7 @@ function manualSwitch(){
 }
 function updateControl(dt){
   G.switchT -= dt;
+  if (LOCKED){ G.user = LOCKED; return; }   // MyCareer: no auto/manual switching
   if (G.phase==="inbound"){
     if (G.poss===0 && G.inbound) G.user = G.inbound.recv;
     return;
@@ -3003,10 +3017,14 @@ function updateButtons(){
   const off = G.poss===0;
   offBtns.classList.toggle("hidden", !off);
   defBtns.classList.toggle("hidden", off);
+  document.getElementById("bSwap").classList.toggle("hidden", !!LOCKED);
   if (off){
     const has = userHasBall();
+    // locked off-ball: PASS becomes CALL FOR IT while a teammate holds
+    const canCall = !has && LOCKED && ball.state==="held" &&
+                    ball.holder && ball.holder.team===0 && ball.holder!==LOCKED;
     for (const id of ["bShoot","bPass","bCross","bSpin","bScreen"])
-      document.getElementById(id).classList.toggle("dis", !has);
+      document.getElementById(id).classList.toggle("dis", !has && !(id==="bPass" && canCall));
     // TURBO + range: the shoot slot becomes a slam
     const dk = dunkReady();
     document.getElementById("bDunk").classList.toggle("hidden", !dk);
@@ -3036,7 +3054,7 @@ function inboundFor(t){
   ball.state = "held"; ball.holder = inb; ball.lastHolder = inb;
   ball.pos.set(inb.pos.x, 1, inb.pos.z);
   G.inbound = {passer: inb, recv, T: .85, guard: 0};
-  if (t===0) G.user = recv;
+  if (t===0) G.user = LOCKED || recv;
   G.phase = "inbound";
 }
 
@@ -3235,6 +3253,46 @@ document.getElementById("againBtn").addEventListener("pointerup", ()=>{
 });
 document.getElementById("resumeBtn").addEventListener("pointerup", togglePause);
 document.getElementById("pauseBtn").addEventListener("pointerup", e=>{ e.stopPropagation(); togglePause(); });
+
+/* sim the rest of the match instantly: silent CPU-vs-CPU fast-forward on
+   the REAL engine, so the result (and bridged MatchResult) is legitimate */
+function simToEnd(){
+  if (G.phase==="menu" || G.phase==="over") return;
+  G.paused = false; pausedEl.classList.add("hidden");
+  if (G.meter.active){ G.meter.active = false; meterHide(); }
+  const wasAuto = AUTOPLAY;
+  AUTOPLAY = true; MUTE = true;
+  const step = .05;
+  let guard = 0;
+  while (G.phase!=="over" && guard++ < 60000){
+    updateClocks(step);
+    if (G.phase!=="over"){
+      updateControl(step);
+      updateAI(step);
+      updatePlayers(step);
+      updateBall(step);
+    }
+  }
+  AUTOPLAY = wasAuto; MUTE = false;
+  updateHUD();
+}
+function quitGame(){
+  G.paused = false; pausedEl.classList.add("hidden");
+  G.turbo = false;
+  if (G.meter.active){ G.meter.active = false; meterHide(); }
+  if (BRIDGE){
+    // abandon the bridged match: no MatchResult, the app drops its pending flag
+    sessionStorage.removeItem("fb5.matchConfig");
+    sessionStorage.removeItem("fb5.matchResult");
+    location.href = BRIDGE.meta?.returnUrl || "../index.html";
+    return;
+  }
+  G.phase = "menu";
+  G.user = null;
+  menuEl.classList.remove("hidden");
+}
+document.getElementById("simEndBtn").addEventListener("pointerup", simToEnd);
+document.getElementById("quitBtn").addEventListener("pointerup", quitGame);
 
 function applyTeams(defsOverride){
   const defs = defsOverride || [LEAGUE[G.sel.you], LEAGUE[G.sel.cpu]];
@@ -3493,6 +3551,7 @@ function toDef(t){
 }
 
 function runBridged(config){
+  BRIDGE = config;
   G.sel.qlen = config.rules.quarterLength || 120;
   G.sel.diff = config.difficulty ?? 1;
   G.rulesQ  = config.rules.quarters || 4;
@@ -3500,6 +3559,9 @@ function runBridged(config){
   TIMESCALE = Math.max(1, Math.min(4, +config.meta?.timeScale || 1));
   applyTeams([toDef(config.home), toDef(config.away)]);
   if (config.meta?.venue === "park") setVenue("park");
+  // MyCareer: you play as YOUR player only — no switching to teammates
+  if (config.meta?.career && config.myPlayer?.side === "home" && !AUTOPLAY)
+    LOCKED = G.teams[0][Math.max(0, Math.min(4, config.myPlayer.index|0))];
   window.__fb5OnGameOver = () => finishBridged(config);
   menuEl.classList.add("hidden");
   resetGame();
