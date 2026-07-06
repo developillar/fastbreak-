@@ -96,6 +96,10 @@ export class SaveStore {
       /* corrupted/blocked backend -> degrade rather than brick the app */
       if (this.backend.kind !== "memory") this.backend = new MemoryBackend();
     }
+    /* the synchronous journal may be newer than the async backend if the
+       page was torn down mid-write (reload/close aborts IDB transactions) */
+    const j = this._journalRead();
+    if (j && (!blob || (j.savedAt || 0) > (blob.savedAt || 0))) blob = j;
     this._cache = blob ? migrate(blob) : defaultSave();
     return this._cache;
   }
@@ -103,8 +107,22 @@ export class SaveStore {
     if (!blob) throw new Error("nothing to save");
     if (blob.schema !== SAVE_SCHEMA) throw new Error("refusing to save wrong-schema blob");
     this._cache = blob;
+    blob.savedAt = Date.now();
+    this._journalWrite(blob);          // sync: survives instant reload/close
     await this.backend.write(blob);
     return blob;
+  }
+  /* localStorage journal — synchronous, so it commits even when an IDB
+     write is aborted by navigation. Same key the LS backend uses. */
+  _journalWrite(blob) {
+    if (this.backend.kind === "localStorage") return; // backend IS the journal
+    try { globalThis.localStorage?.setItem(LS_KEY, JSON.stringify(blob)); } catch {}
+  }
+  _journalRead() {
+    try {
+      const raw = globalThis.localStorage?.getItem(LS_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
   }
   /* convenience: load, mutate, persist */
   async update(fn) {
@@ -114,6 +132,7 @@ export class SaveStore {
   }
   async reset() {
     this._cache = defaultSave();
+    try { globalThis.localStorage?.removeItem(LS_KEY); } catch {}
     await this.backend.clear();
     return this._cache;
   }

@@ -47,6 +47,17 @@
       radial-gradient(60% 30% at 50% 108%, rgba(47,123,255,.20), transparent 70%),
       linear-gradient(0deg, rgba(7,10,18,.85), transparent 40%);}
   @keyframes drift{from{transform:translateX(0)}to{transform:translateX(300px)}}
+  #bg b{position:absolute;width:46vh;height:46vh;border-radius:50%;filter:blur(70px);opacity:.5;will-change:transform}
+  #bg b.o1{left:-14vh;top:6vh;background:radial-gradient(circle,rgba(47,123,255,.34),transparent 65%);
+    animation:orb1 17s ease-in-out infinite alternate}
+  #bg b.o2{right:-16vh;bottom:-4vh;background:radial-gradient(circle,rgba(57,212,255,.2),transparent 65%);
+    animation:orb2 23s ease-in-out infinite alternate}
+  @keyframes orb1{from{transform:translate(0,0)}to{transform:translate(9vh,14vh)}}
+  @keyframes orb2{from{transform:translate(0,0)}to{transform:translate(-11vh,-9vh)}}
+
+  /* view-to-view transition: each view rises in when shown */
+  .view{animation:viewin .34s cubic-bezier(.2,.9,.3,1) both}
+  @keyframes viewin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 
   #app{position:relative;z-index:1;width:100%;max-width:430px;min-height:100vh;
     padding:max(18px, env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom))}
@@ -109,7 +120,10 @@
   .chev{font-family:var(--cond);font-weight:900;font-size:26px;color:var(--cyan);
     transform:scaleY(1.4);margin-left:10px}
   .tile.hero{min-height:86px;border-color:rgba(57,180,255,.5);
-    background:linear-gradient(150deg,#1746a8 0%,#0f2a68 55%,#0b1a3f 100%)}
+    background:linear-gradient(150deg,#1746a8 0%,#0f2a68 55%,#0b1a3f 100%);overflow:hidden}
+  .tile.hero::after{content:"";position:absolute;top:-40%;bottom:-40%;width:30%;left:-50%;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.16),transparent);
+    transform:skewX(-18deg);animation:sheen 4.2s ease-in-out infinite;pointer-events:none}
   .tile.hero .edge{background:var(--cyan)}
   .tile.hero .tlab{font-size:30px}
   .tile.hero .tsub{color:#9fc4ff}
@@ -151,10 +165,14 @@
   .ovrwrap{display:flex;flex-direction:column;align-items:center;justify-content:center;
     padding:0 18px;background:linear-gradient(200deg,rgba(47,123,255,.22),transparent);
     border-left:1px solid var(--line)}
-  .ovrshield{width:64px;height:70px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  .ovrshield{position:relative;width:64px;height:70px;display:flex;flex-direction:column;align-items:center;justify-content:center;
     background:linear-gradient(170deg,#2f7bff,#123a8f);
     clip-path:polygon(50% 0,100% 14%,100% 74%,50% 100%,0 74%,0 14%);
-    box-shadow:0 6px 20px rgba(47,123,255,.5)}
+    box-shadow:0 6px 20px rgba(47,123,255,.5);animation:shieldglow 3s ease-in-out infinite}
+  @keyframes shieldglow{50%{box-shadow:0 6px 30px rgba(57,180,255,.85)}}
+  .ovrshield::after{content:"";position:absolute;top:-30%;bottom:-30%;width:36%;left:-60%;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);
+    transform:skewX(-16deg);animation:sheen 3s ease-in-out infinite}
   #mpOvr{font-family:var(--cond);font-weight:900;font-size:30px;line-height:1;font-style:italic}
   .ovrlab{font-size:7.5px;font-weight:900;letter-spacing:.3em;padding-left:.3em;color:#bcd4ff}
   .mpbtns{display:flex;border-top:1px solid var(--line)}
@@ -233,10 +251,14 @@
   /* result view */
   #resScore{font-family:var(--cond);font-weight:900;font-style:italic;font-size:54px;text-align:center;
     line-height:1;margin:6px 0 2px;font-variant-numeric:tabular-nums;
-    background:linear-gradient(180deg,#fff,#8fb0e8);-webkit-background-clip:text;background-clip:text;color:transparent}
+    background:linear-gradient(180deg,#fff,#8fb0e8);-webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:scorein .5s cubic-bezier(.2,1.4,.4,1) both .1s}
+  @keyframes scorein{from{opacity:0;transform:scale(.55)}60%{transform:scale(1.06)}to{opacity:1;transform:scale(1)}}
   #resMeta{font-size:9px;letter-spacing:.2em;color:var(--dim);text-align:center;font-weight:800;margin-bottom:10px}
   #resGrade .fmeta{text-align:center;font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--good);
-    padding:8px;margin-bottom:8px;background:rgba(56,224,127,.07);border:1px solid rgba(56,224,127,.25)}
+    padding:8px;margin-bottom:8px;background:rgba(56,224,127,.07);border:1px solid rgba(56,224,127,.25);
+    animation:stampin .45s cubic-bezier(.2,1.5,.4,1) both .35s}
+  @keyframes stampin{from{opacity:0;transform:scale(1.5)}to{opacity:1;transform:scale(1)}}
   table{width:100%;border-collapse:collapse;font-size:9.5px;font-variant-numeric:tabular-nums}
   th,td{padding:4px 2px;text-align:right;border-bottom:1px solid rgba(120,160,255,.08)}
   th{color:#586897;font-size:8px;letter-spacing:.08em;font-weight:800}
@@ -328,7 +350,7 @@
 </style>
 </head>
 <body>
-<div id="bg"></div>
+<div id="bg"><b class="o1"></b><b class="o2"></b></div>
 
 <div id="splash">
   <div class="slogo sheen">FAST<br>BREAK<b>FIVE</b></div>
@@ -416,7 +438,7 @@
     <div class="rowlink" id="btnReset" style="color:#7a4046">RESET SAVE DATA</div>
 
     <div class="foot">ENGINE-AS-SERVICE · ONE SAVE BLOB · PWA<br>NO PAY-TO-WIN. EVER.<br>
-      <span id="verTag" style="color:#4a5878">V0.9.0</span></div>
+      <span id="verTag" style="color:#4a5878">V0.10.0</span></div>
   </div>
 
   <!-- ============ CREATE ============ -->

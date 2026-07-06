@@ -27,7 +27,7 @@ import {
   tierOf, tierProgress, PARK_TIERS,
 } from "../park/park.js";
 
-const APP_VERSION = "0.9.0";   // keep in sync with sw.js / version.json / footer
+const APP_VERSION = "0.10.0";   // keep in sync with sw.js / version.json / footer
 const $ = id => document.getElementById(id);
 const store = new SaveStore();
 const league = buildLeague();
@@ -160,7 +160,7 @@ function renderHome() {
     $("mpName").textContent = mp.name;
     $("mpSub").textContent = (mp.body ? formatHeight(mp.body.heightIn) + " · " : "") +
       mp.position + " · " + ARCHETYPES[mp.archetypeId].label;
-    $("mpOvr").textContent = myPlayerOvr(mp);
+    countUpNum($("mpOvr"), myPlayerOvr(mp));
     $("mpCur").textContent = mp.up + " UP · " + mp.rep + " REP";
     const t = mp.totals;
     $("mpTotals").textContent = t.games + " GP · " + t.wins + " W · " + t.pts + " PTS";
@@ -604,9 +604,36 @@ function launchParkGame(courtId) {
 }
 
 /* ---------------- result view ---------------- */
+/* count-up: numbers roll to their target (pure presentation; the real value
+   is set immediately as a fallback for reduced-motion / tests) */
+function countUpNum(el, to, ms = 500) {
+  const from = parseInt(el.textContent, 10);
+  el.textContent = to;
+  if (isNaN(from) || from === to || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const t0 = performance.now();
+  cancelAnimationFrame(el._cnt);
+  const step = t => {
+    const k = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = Math.round(from + (to - from) * e);
+    if (k < 1) el._cnt = requestAnimationFrame(step);
+  };
+  el._cnt = requestAnimationFrame(step);
+}
+function countUpScore(el, a, b, ms = 700) {
+  el.textContent = a + " — " + b;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const t0 = performance.now();
+  cancelAnimationFrame(el._cnt);
+  const step = t => {
+    const k = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = Math.round(a * e) + " — " + Math.round(b * e);
+    if (k < 1) el._cnt = requestAnimationFrame(step);
+  };
+  el._cnt = requestAnimationFrame(step);
+}
 function renderResult(r) {
   $("resTitle").textContent = (r.engine === "headless" ? "SIMULATED · " : "") + "FINAL";
-  $("resScore").textContent = r.score.home + " — " + r.score.away;
+  countUpScore($("resScore"), r.score.home, r.score.away);
   $("resMeta").textContent = (r.meta?.label || "") + " · " +
     r.periods.map(p => p.home + "-" + p.away).join("  ");
   const mp = r.myPlayer;
