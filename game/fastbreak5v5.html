@@ -815,7 +815,8 @@ function buildJumbotron(){
   const mast = new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,7,6),
     new THREE.MeshLambertMaterial({color:0x151a26}));
   mast.position.y = 4.2; gr.add(mast);
-  gr.position.set(0, 8.1, 0);
+  // hung well above the gameplay camera (y~8.6) so it never blocks the view
+  gr.position.set(0, 11.8, 0);
   scene.add(gr);
 }
 function drawJumbo(){
@@ -2054,8 +2055,8 @@ function dribbleMove(p, kind){
     if (p.cd.cross>0) return; p.cd.cross = 1.15;
     const sgn = (p===G.user && joy.mag>.2) ? Math.sign(joy.x||1) : (Math.random()<.5?-1:1);
     p.crossSgn = sgn;
-    p.crossT = .38;              // beat 1 sells the fake, beat 2 explodes
-    p.burstT = .5;
+    p.crossT = .46;              // beat 1 sells the fake, beat 2 explodes
+    p.burstT = .55;
     p.hand = -sgn; p.handTarget = sgn;
   } else if (kind==="euro"){
     // two beats: hard step one way, harder step back the other, downhill
@@ -2537,9 +2538,9 @@ function updatePlayers(dt){
       // crossover: small rock toward the fake side, then a violent snap back
       tmpA.subVectors(rimOf(p.team), p.pos); tmpA.y=0; tmpA.normalize();
       const sx = tmpA.z, sz = -tmpA.x;
-      const sell = p.crossT > .24;
-      const lat = sell ? -3.4*p.crossSgn : 9.4*p.crossSgn;
-      const fw  = sell ? .5 : 3.0;
+      const sell = p.crossT > .30;
+      const lat = sell ? -3.6*p.crossSgn : 12.5*p.crossSgn;
+      const fw  = sell ? .4 : 4.4;
       dvx = tmpA.x*fw + sx*lat;
       dvz = tmpA.z*fw + sz*lat;
     }
@@ -2583,6 +2584,7 @@ function updatePlayers(dt){
       else if (spd0 > 4.6 && dot < .6) acc *= .72;       // wide turns at sprint
     }
     if (p.burstT>0) acc *= 1.5;
+    if (p.crossT>0 && p.crossT<=.30) acc *= 2.1;   // the snap beat actually SNAPS
     let ax = dvx - p.vel.x, az = dvz - p.vel.z;
     const aLen = Math.hypot(ax, az), maxD = acc*dt;
     if (aLen > maxD){ ax *= maxD/aLen; az *= maxD/aLen; }
@@ -2790,7 +2792,7 @@ function updateBall(dt){
       }
       // crossover: the ball swings WIDE and dips LOW across the body
       if (h.crossT > 0){
-        const u = ss(1 - h.crossT/.38);
+        const u = ss(1 - h.crossT/.46);
         const off = lerp(-h.crossSgn*.58, h.crossSgn*.52, u);
         const by = .58 - .34*Math.sin(Math.PI*u);          // lowest mid-whip
         ball.pos.set(h.pos.x + rx*off + fx*.24, by + h.y, h.pos.z + rz*off + fz*.24);
