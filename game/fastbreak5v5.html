@@ -2392,7 +2392,10 @@ function updateAI(dt){
         continue;
       }
       if (ball.holder===p){
-        if ((p.team===1 || AUTOPLAY) && G.phase==="play") cpuHandler(p, dt);
+        // AI runs the offense for: the CPU team, autoplay, and (in locked
+        // MyCareer) any teammate who isn't YOU — they attack, don't statue
+        const aiBall = p.team===1 || AUTOPLAY || (LOCKED && p!==LOCKED);
+        if (aiBall && G.phase==="play") cpuHandler(p, dt);
         else p.hasSeek=false;
         continue;
       }
@@ -2515,7 +2518,15 @@ function updatePlayers(dt){
     // timers
     for (const k of ["cross","spin","euro","step","steal","block"]) if (p.cd[k]>0) p.cd[k]-=dt;
     if (p.euroT>0) p.euroT-=dt;
-    if (p.crossT>0){ p.crossT-=dt; if (p.crossT<=0) p.hand = p.crossSgn; }
+    if (p.crossT>0){
+      p.crossT-=dt;
+      if (p.crossT<=0){
+        p.hand = p.crossSgn;
+        // cap the exit speed at sprint so the escape doesn't turn into a slide
+        const sp = Math.hypot(p.vel.x, p.vel.z), cap = p.speedMax(true);
+        if (sp > cap){ p.vel.x *= cap/sp; p.vel.z *= cap/sp; }
+      }
+    }
     if (p.euroBoost>0) p.euroBoost-=dt;
     if (p.stepBoost>0) p.stepBoost-=dt;
     if (p.freezeT>0){ p.freezeT-=dt; if (p.freezeT<=0) p.recoverT = .5; }
@@ -2551,8 +2562,8 @@ function updatePlayers(dt){
       tmpA.subVectors(rimOf(p.team), p.pos); tmpA.y=0; tmpA.normalize();
       const sx = tmpA.z, sz = -tmpA.x;
       const sell = p.crossT > .30;
-      const lat = sell ? -3.6*p.crossSgn : 12.5*p.crossSgn;
-      const fw  = sell ? .4 : 4.4;
+      const lat = sell ? -3.6*p.crossSgn : 8.5*p.crossSgn;
+      const fw  = sell ? .4 : 3.6;
       dvx = tmpA.x*fw + sx*lat;
       dvz = tmpA.z*fw + sz*lat;
     }
