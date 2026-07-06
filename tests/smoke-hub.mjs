@@ -70,7 +70,7 @@ try {
   await page.click("#evPlayScene");
   await page.waitForSelector("#viewCutscene:not(.hidden)");
   const line1 = await page.textContent("#csText");
-  check("cutscene renders placeholder lines", line1.includes("[EDIT]"), line1.slice(0, 40));
+  check("cutscene renders story lines", line1.trim().length > 20 && !line1.includes("[EDIT]"), line1.slice(0, 40));
   await page.click("#viewCutscene");   // line 2
   await page.click("#viewCutscene");   // line 3
   await page.click("#viewCutscene");   // end scene

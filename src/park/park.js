@@ -167,7 +167,7 @@ export function parkGameConfig(save, league, courtId, provider = BotProvider) {
     rules: court.rules,
     home, away,
     myPlayer: { side: "home", index: slot },
-    meta: { label: court.label + " · " + court.mode + " vs " + away.name, park: courtId },
+    meta: { label: court.label + " · " + court.mode + " vs " + away.name, park: courtId, venue: "park" },
   });
 }
 

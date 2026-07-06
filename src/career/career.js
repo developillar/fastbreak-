@@ -210,7 +210,8 @@ export function careerGameConfig(save, league) {
     rules: { quarterLength: 120 },
     myPlayer: { side: "home", index: slot },
     objectives: ev.objectives || [],
-    meta: { label: ev.label + (ev.opponent === "rival" ? " vs " + RIVAL.name : ""), career: true },
+    meta: { label: ev.label + (ev.opponent === "rival" ? " vs " + RIVAL.name : ""), career: true,
+            venue: ev.venue === "street" ? "park" : null },
   });
 }
 

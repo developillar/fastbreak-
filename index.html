@@ -215,6 +215,15 @@
   .sw{width:38px;height:38px;cursor:pointer;border:2px solid rgba(120,160,255,.2);
     clip-path:polygon(25% 0,100% 0,100% 75%,75% 100%,0 100%,0 25%);transition:transform .1s}
   .sw.on{border-color:var(--cyan);transform:scale(1.12);box-shadow:0 0 14px rgba(57,212,255,.5)}
+  /* face creator */
+  .facewrap{display:flex;gap:14px;align-items:flex-start;margin-top:4px}
+  #cFace{width:120px;height:132px;flex:none;border:1px solid var(--line);
+    background:radial-gradient(120% 100% at 50% 18%,#182446 0%,#0a0f1d 80%);
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 8px)}
+  .facectl{flex:1;min-width:0}
+  .seg.mini div{min-width:44px;padding:8px 2px;font-size:10px}
+  .swatches.mini{gap:7px}
+  .swatches.mini .sw{width:30px;height:30px}
   #cDeltas{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;min-height:22px}
   .dchip{font-size:9.5px;font-weight:800;letter-spacing:.06em;padding:4px 8px;border-radius:3px}
   .dchip.up{background:rgba(56,224,127,.13);border:1px solid rgba(56,224,127,.4);color:var(--good)}
@@ -305,23 +314,37 @@
   .courtcard .evbtns{margin-top:11px}
 
   /* ================= cutscene player ================= */
-  #viewCutscene{position:fixed;inset:0;z-index:30;background:#000;cursor:pointer}
+  #viewCutscene{position:fixed;inset:0;z-index:30;background:#000;cursor:pointer;overflow:hidden}
   #viewCutscene::before,#viewCutscene::after{content:"";position:absolute;left:0;right:0;height:11vh;z-index:2;background:#000}
   #viewCutscene::before{top:0;border-bottom:1px solid rgba(255,255,255,.08)}
   #viewCutscene::after{bottom:0;border-top:1px solid rgba(255,255,255,.08)}
-  #viewCutscene{background:
-    radial-gradient(120% 90% at 50% 30%, #131c38 0%, #05070d 75%)}
+  #csBg{position:absolute;left:-4%;top:-4%;width:108%;height:108%;object-fit:cover;
+    animation:kenburns 26s ease-in-out infinite alternate}
+  @keyframes kenburns{from{transform:scale(1) translate(0,0)}to{transform:scale(1.07) translate(-1.6%,1.2%)}}
+  #csGrain{position:absolute;inset:0;z-index:1;pointer-events:none;opacity:.5;
+    background:
+      radial-gradient(120% 80% at 50% 30%, transparent 45%, rgba(0,0,0,.55) 100%),
+      repeating-linear-gradient(0deg, rgba(0,0,0,.11) 0 1px, transparent 1px 3px)}
   #csTag{position:absolute;top:calc(11vh + 14px);left:18px;z-index:3;
-    font-size:9px;font-weight:800;letter-spacing:.34em;color:var(--amber)}
+    font-size:9px;font-weight:800;letter-spacing:.34em;color:var(--amber);
+    text-shadow:0 1px 6px rgba(0,0,0,.9)}
   #csBox{position:absolute;left:14px;right:14px;bottom:calc(11vh + 14px);z-index:3;
     background:rgba(8,12,24,.88);border:1px solid rgba(120,160,255,.25);padding:16px 18px 14px 20px;
     clip-path:polygon(10px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 10px);
     backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
   #csBox::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
     background:linear-gradient(180deg,var(--amber),#ff7a3c)}
+  .csrow{display:flex;gap:12px;align-items:flex-start}
+  #csFace{width:64px;height:70px;flex:none;border:1px solid rgba(255,181,69,.4);
+    background:radial-gradient(120% 100% at 50% 20%,#1b2540,#0a0f1d 85%);
+    clip-path:polygon(6px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 6px)}
+  #csFace.none{display:none}
+  .cstxt{flex:1;min-width:0}
   #csSpeaker{font-family:var(--cond);font-weight:900;font-style:italic;font-size:14px;
     letter-spacing:.18em;color:var(--amber);margin-bottom:7px}
   #csText{font-size:14px;line-height:1.65;color:#e8eefb;min-height:52px;animation:csfade .3s both}
+  #csText .tw{opacity:0;animation:twin .12s forwards}
+  @keyframes twin{to{opacity:1}}
   @keyframes csfade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   #csHint{margin-top:10px;font-size:8.5px;font-weight:800;letter-spacing:.3em;color:#5b6a8c;
     text-align:right;animation:pulse 1.6s ease-in-out infinite}
@@ -438,7 +461,7 @@
     <div class="rowlink" id="btnReset" style="color:#7a4046">RESET SAVE DATA</div>
 
     <div class="foot">ENGINE-AS-SERVICE · ONE SAVE BLOB · PWA<br>NO PAY-TO-WIN. EVER.<br>
-      <span id="verTag" style="color:#4a5878">V0.10.0</span></div>
+      <span id="verTag" style="color:#4a5878">V0.11.0</span></div>
   </div>
 
   <!-- ============ CREATE ============ -->
@@ -466,6 +489,21 @@
 
       <div class="formlab">SKIN TONE</div>
       <div class="swatches" id="cSkin"></div>
+
+      <div class="ptitle" style="margin-top:16px">FACE</div>
+      <div class="facewrap">
+        <canvas id="cFace" width="240" height="264"></canvas>
+        <div class="facectl">
+          <div class="formlab" style="margin-top:0">HAIR</div>
+          <div class="seg mini" id="cHair"></div>
+          <div class="formlab">HAIR COLOR</div>
+          <div class="swatches mini" id="cHairCol"></div>
+        </div>
+      </div>
+      <div class="formlab">FACIAL HAIR</div>
+      <div class="seg" id="cBeard"></div>
+      <div class="formlab">HEADBAND</div>
+      <div class="seg" id="cBand"></div>
 
       <div id="cDeltas"></div>
 
@@ -519,10 +557,17 @@
 
   <!-- ============ CUTSCENE (letterboxed player) ============ -->
   <div id="viewCutscene" class="hidden">
+    <canvas id="csBg" width="500" height="750"></canvas>
+    <div id="csGrain"></div>
     <div id="csTag"></div>
     <div id="csBox">
-      <div id="csSpeaker"></div>
-      <div id="csText"></div>
+      <div class="csrow">
+        <canvas id="csFace" width="140" height="154"></canvas>
+        <div class="cstxt">
+          <div id="csSpeaker"></div>
+          <div id="csText"></div>
+        </div>
+      </div>
       <div id="csHint">TAP TO CONTINUE ›</div>
       <div id="csChoices"></div>
     </div>

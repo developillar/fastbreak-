@@ -11,6 +11,28 @@
 
 export const SKIN_TONES = [0xf0c8a0, 0xc98d5a, 0x8a5a32, 0x6b4225, 0xe8b48c]; // matches the game's SKINS
 
+/* ---- face creator (cosmetic; rendered by the rig + 2D portraits) ---- */
+export const HAIR_STYLES = [
+  { id: 0, label: "BUZZ" },
+  { id: 1, label: "FADE" },
+  { id: 2, label: "AFRO" },
+  { id: 3, label: "TWISTS" },
+  { id: 4, label: "BALD" },
+];
+export const HAIR_COLORS = [0x14110e, 0x332212, 0x5c3a1e, 0x8a8f99, 0xcbb98a];
+export const BEARDS = [
+  { id: 0, label: "NONE" },
+  { id: 1, label: "GOATEE" },
+  { id: 2, label: "FULL" },
+  { id: 3, label: "CHIN" },
+];
+export const BANDS = [
+  { id: 0, label: "NONE", color: null },
+  { id: 1, label: "WHITE", color: 0xe8ecf4 },
+  { id: 2, label: "BLACK", color: 0x1a1d24 },
+  { id: 3, label: "TEAM", color: "team" },   // resolves to jersey color in-engine
+];
+
 export const BUILDS = {
   slim: {
     id: "slim", label: "SLIM",
@@ -62,7 +84,10 @@ export function wingspanRange(heightIn) {
 export function defaultBody(position, archetype) {
   const [hMin, hMax] = heightRange(position, archetype);
   const heightIn = Math.round((hMin + hMax) / 2);
-  return { heightIn, wingspanIn: heightIn + 2, build: "balanced", skin: 0 };
+  return {
+    heightIn, wingspanIn: heightIn + 2, build: "balanced", skin: 0,
+    hair: 1, hairColor: 0, beard: 0, band: 0,
+  };
 }
 
 /* -1..1 normalized wingspan (0 at the +3" midpoint) — also what the rig
@@ -109,6 +134,10 @@ export function sanitizeBody(body, position, archetype) {
   out.wingspanIn = Math.round(Math.max(wMin, Math.min(wMax, out.wingspanIn)));
   if (!BUILDS[out.build]) out.build = "balanced";
   out.skin = Math.max(0, Math.min(SKIN_TONES.length - 1, out.skin | 0));
+  out.hair = Math.max(0, Math.min(HAIR_STYLES.length - 1, out.hair | 0));
+  out.hairColor = Math.max(0, Math.min(HAIR_COLORS.length - 1, out.hairColor | 0));
+  out.beard = Math.max(0, Math.min(BEARDS.length - 1, out.beard | 0));
+  out.band = Math.max(0, Math.min(BANDS.length - 1, out.band | 0));
   return out;
 }
 
@@ -118,5 +147,9 @@ export function toLook(body) {
     skin: body.skin,
     build: body.build,
     wingspan: Math.round(wingspanNorm(body) * 100) / 100,
+    hair: body.hair ?? 1,
+    hairColor: body.hairColor ?? 0,
+    beard: body.beard ?? 0,
+    band: body.band ?? 0,
   };
 }

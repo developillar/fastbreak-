@@ -10,9 +10,12 @@ import { ATTR_KEYS, ATTR_LABELS, rateAttr } from "../core/attributes.js";
 import { ARCHETYPES, POSITIONS, TIER_NAMES } from "../player/archetypes.js";
 import { BADGES } from "../player/badges.js";
 import {
-  SKIN_TONES, BUILDS, heightRange, wingspanRange, formatHeight,
-  defaultBody, sanitizeBody, bodyMods,
+  SKIN_TONES, BUILDS, HAIR_STYLES, HAIR_COLORS, BEARDS, BANDS,
+  heightRange, wingspanRange, formatHeight,
+  defaultBody, sanitizeBody, bodyMods, toLook,
 } from "../player/body.js";
+import { drawFace } from "../player/face.js";
+import { drawSceneBg } from "./scenes.js";
 import {
   createMyPlayer, myPlayerOvr, capsOf, canUpgrade, spendUP,
   canUnlockBadge, unlockBadge, toPlayerSpec, applyMatchRewards, badgeAccessOf,
@@ -27,7 +30,7 @@ import {
   tierOf, tierProgress, PARK_TIERS,
 } from "../park/park.js";
 
-const APP_VERSION = "0.10.0";   // keep in sync with sw.js / version.json / footer
+const APP_VERSION = "0.11.0";   // keep in sync with sw.js / version.json / footer
 const $ = id => document.getElementById(id);
 const store = new SaveStore();
 const league = buildLeague();
@@ -224,6 +227,32 @@ function renderCreate() {
     cSel.body.skin = +el.dataset.s; renderCreate();
   }));
 
+  /* face creator */
+  const hairEl = $("cHair");
+  if (hairEl) {
+    hairEl.innerHTML = HAIR_STYLES.map(h =>
+      `<div data-h="${h.id}" class="${h.id === cSel.body.hair ? "on" : ""}">${h.label}</div>`).join("");
+    hairEl.querySelectorAll("div").forEach(el => el.addEventListener("click", () => {
+      cSel.body.hair = +el.dataset.h; renderCreate();
+    }));
+    $("cHairCol").innerHTML = HAIR_COLORS.map((hex, i) =>
+      `<div class="sw ${i === cSel.body.hairColor ? "on" : ""}" data-c="${i}"
+         style="background:#${hex.toString(16).padStart(6, "0")}"></div>`).join("");
+    $("cHairCol").querySelectorAll(".sw").forEach(el => el.addEventListener("click", () => {
+      cSel.body.hairColor = +el.dataset.c; renderCreate();
+    }));
+    $("cBeard").innerHTML = BEARDS.map(b =>
+      `<div data-b="${b.id}" class="${b.id === cSel.body.beard ? "on" : ""}">${b.label}</div>`).join("");
+    $("cBeard").querySelectorAll("div").forEach(el => el.addEventListener("click", () => {
+      cSel.body.beard = +el.dataset.b; renderCreate();
+    }));
+    $("cBand").innerHTML = BANDS.map(b =>
+      `<div data-n="${b.id}" class="${b.id === cSel.body.band ? "on" : ""}">${b.label}</div>`).join("");
+    $("cBand").querySelectorAll("div").forEach(el => el.addEventListener("click", () => {
+      cSel.body.band = +el.dataset.n; renderCreate();
+    }));
+  }
+
   renderBuilder();
 }
 /* sliders + live tradeoff readout (cheap enough to run every input tick) */
@@ -254,6 +283,9 @@ function renderBuilder() {
     const prev = createMyPlayer({ name: "PREVIEW", position: cSel.pos, archetypeId: cSel.arch, body: cSel.body });
     $("cOvrPrev").textContent = "OVR " + myPlayerOvr(prev);
   } catch { $("cOvrPrev").textContent = ""; }
+
+  const fc = $("cFace");
+  if (fc) drawFace(fc, toLook(cSel.body), { jersey: "#2f7bff" });
 }
 
 /* ---------------- upgrades ---------------- */
@@ -467,9 +499,20 @@ function renderCareer() {
 }
 
 /* ---------------- cutscene player ---------------- */
+/* portrait cast — speakers listed here get a face next to their words.
+   YOU always renders the MyPlayer's own face-creator look. */
+const CAST = {
+  "SCOUT REYES":  { look: { skin: 4, hair: 4, hairColor: 3, beard: 2, band: 0 }, jersey: "#2b3242" },
+  "D. AMARI":     { look: { skin: 2, hair: 3, hairColor: 0, beard: 3, band: 0 }, jersey: "#7a4fd1" },
+  "COACH":        { look: { skin: 0, hair: 4, hairColor: 3, beard: 0, band: 0 }, jersey: "#1d2a45" },
+  "REPORTER":     { look: { skin: 1, hair: 0, hairColor: 1, beard: 0, band: 0 }, jersey: "#3a2f52" },
+  "COMMISSIONER": { look: { skin: 3, hair: 0, hairColor: 3, beard: 1, band: 0 }, jersey: "#20263a" },
+};
 const cs = { scene: null, line: 0 };
 function playScene(scene) {
   cs.scene = scene; cs.line = 0;
+  const bg = $("csBg");
+  if (bg) drawSceneBg(bg, scene.bg || "blacktop");
   renderCutsceneLine();
   show("viewCutscene");
 }
@@ -478,10 +521,27 @@ function renderCutsceneLine() {
   const cur = currentEvent(save.career);
   $("csTag").textContent = (cur.done ? "" : `CH ${cur.chapterIndex} · ${cur.chapter.title} — `) + cs.scene.title;
   const line = cs.scene.lines[cs.line];
-  $("csSpeaker").textContent = interpolate(line.speaker, ctx);
-  $("csText").textContent = interpolate(line.text, ctx);
-  $("csText").style.animation = "none"; void $("csText").offsetWidth;
-  $("csText").style.animation = "";
+  const speaker = interpolate(line.speaker, ctx);
+  $("csSpeaker").textContent = speaker;
+  // portrait: the cast table, or the MyPlayer's own face for YOU / their name
+  const fc = $("csFace");
+  if (fc) {
+    let who = CAST[speaker] || null;
+    if (speaker === "YOU" || (save.myPlayer && speaker === save.myPlayer.name)) {
+      who = save.myPlayer?.body
+        ? { look: toLook(save.myPlayer.body), jersey: "#2f7bff" } : null;
+    }
+    fc.classList.toggle("none", !who);
+    if (who) drawFace(fc, who.look, { jersey: who.jersey });
+  }
+  // word-by-word reveal (full text lands in the DOM immediately; only the
+  // opacity is staggered, so taps/tests never race the animation)
+  const words = interpolate(line.text, ctx).split(/(\s+)/);
+  let wi = 0;
+  $("csText").innerHTML = words.map(w =>
+    /^\s+$/.test(w) ? w
+      : `<span class="tw" style="animation-delay:${Math.min(2400, wi++ * 42)}ms">${w
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;")}</span>`).join("");
   const atEnd = cs.line >= cs.scene.lines.length - 1;
   const hasChoice = atEnd && cs.scene.choice;
   $("csHint").style.display = hasChoice ? "none" : "block";
