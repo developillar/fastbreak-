@@ -37,6 +37,8 @@
   .hteam .nm{font-family:var(--cond);font-size:10px;font-weight:900;font-style:italic;letter-spacing:.2em}
   .hteam .sc{font-family:var(--cond);font-size:25px;font-weight:900;font-style:italic;
     font-variant-numeric:tabular-nums;line-height:1.02;text-shadow:0 2px 8px rgba(0,0,0,.5)}
+  .hteam .sc.bump{animation:scbump .5s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes scbump{0%{transform:scale(1)}30%{transform:scale(1.55);color:var(--amber)}100%{transform:scale(1)}}
   #hA .nm{color:var(--you)} #hB .nm{color:var(--cpu)}
   .hmid{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:5px 12px 7px;
     border-left:1px solid var(--line);border-right:1px solid var(--line);
@@ -1038,8 +1040,29 @@ function makeHoop(rimIdx){
   net.position.set(rim.x, rim.y-.23, rim.z);
   gr.add(net);
   scene.add(gr);
+  HOOPS[rimIdx] = { ring, net, netY: rim.y-.23, pulse: 0, wob: 0, flash: 0 };
 }
+const HOOPS = [];
 makeHoop(0); makeHoop(1);
+/* hoop feedback: net whips on a make, rim shivers on iron, glows on a slam */
+function hoopUpdate(dt, now){
+  for (const h of HOOPS){
+    if (!h) continue;
+    if (h.pulse > 0){
+      h.pulse = Math.max(0, h.pulse - dt*2.6);
+      h.net.scale.y = 1 + h.pulse*.55;
+      h.net.position.y = h.netY - h.pulse*.115;
+    }
+    if (h.wob > 0){
+      h.wob = Math.max(0, h.wob - dt*2.2);
+      h.ring.rotation.z = Math.sin(now*.045)*h.wob*.09;
+    } else h.ring.rotation.z = 0;
+    if (h.flash > 0){
+      h.flash = Math.max(0, h.flash - dt*1.6);
+      h.ring.material.emissive.setRGB(h.flash*.85, h.flash*.3, h.flash*.06);
+    }
+  }
+}
 
 /* ---------------- players ---------------- */
 const SKINS = [0xf0c8a0, 0xc98d5a, 0x8a5a32, 0x6b4225, 0xe8b48c];
@@ -1270,6 +1293,64 @@ const ballShadow = new THREE.Mesh(new THREE.CircleGeometry(.15,12),
   new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:.3}));
 ballShadow.rotation.x = -Math.PI/2; ballShadow.position.y = .025;
 scene.add(ballShadow);
+
+/* ---------------- juice: pooled spark/dust particles + ball trail ----------------
+   Nintendo-grade feedback: every meaningful event bursts. One shared pool,
+   additive sprites, tiny floor bounce so sparks feel physical. */
+const FX = { pool: [], tex: null, trailT: 0 };
+{
+  const c = document.createElement("canvas"); c.width = c.height = 32;
+  const g = c.getContext("2d");
+  const gr = g.createRadialGradient(16,16,0,16,16,16);
+  gr.addColorStop(0,"rgba(255,255,255,1)");
+  gr.addColorStop(.45,"rgba(255,255,255,.8)");
+  gr.addColorStop(1,"rgba(255,255,255,0)");
+  g.fillStyle = gr; g.fillRect(0,0,32,32);
+  FX.tex = new THREE.CanvasTexture(c);
+  for (let i=0;i<96;i++){
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map:FX.tex, transparent:true, opacity:0, depthWrite:false,
+      blending:THREE.AdditiveBlending}));
+    sp.visible = false;
+    sp.userData = {life:0, T:1, vx:0, vy:0, vz:0, grav:0, size:.3};
+    scene.add(sp);
+    FX.pool.push(sp);
+  }
+}
+function fxSpawn(x, y, z, color, o={}){
+  const sp = FX.pool.find(s=>!s.visible); if (!sp) return;
+  const u = sp.userData, spd = o.speed ?? 2.2;
+  u.vx = (Math.random()-.5)*2*spd + (o.vx||0);
+  u.vy = Math.random()*spd*.9 + (o.vy||0);
+  u.vz = (Math.random()-.5)*2*spd + (o.vz||0);
+  u.grav = o.grav ?? 5;
+  u.T = u.life = o.life ?? .55;
+  u.size = o.size ?? .3;
+  sp.position.set(x, y, z);
+  sp.material.color.setHex(color);
+  sp.material.opacity = 1;
+  sp.scale.setScalar(u.size);
+  sp.visible = true;
+}
+function fxBurst(pos, color, n, o={}){
+  for (let i=0;i<n;i++) fxSpawn(pos.x, pos.y ?? 0, pos.z, color, o);
+}
+function fxUpdate(dt){
+  for (const sp of FX.pool){
+    if (!sp.visible) continue;
+    const u = sp.userData;
+    u.life -= dt;
+    if (u.life <= 0){ sp.visible = false; sp.material.opacity = 0; continue; }
+    u.vy -= u.grav*dt;
+    sp.position.x += u.vx*dt; sp.position.y += u.vy*dt; sp.position.z += u.vz*dt;
+    if (sp.position.y < .05 && u.vy < 0){ sp.position.y = .05; u.vy *= -.35; u.vx *= .78; u.vz *= .78; }
+    const k = u.life/u.T;
+    sp.material.opacity = k;
+    sp.scale.setScalar(u.size*(.55 + .75*k));
+  }
+}
+/* team hot streak — three straight buckets and the rock catches fire */
+const FIRE = { streak:[0,0], on:[false,false] };
 
 const ball = G.ball = {
   state:"held",   // held | pass | shot | loose | drop
@@ -1614,7 +1695,7 @@ const SFX = {
   // rim rattle while hanging on it
   rattle(){ tone(164,.34,"square",.1,-58); tone(171,.3,"triangle",.09,-50); noise(.1,.08,900,"bandpass"); },
   roar(){
-    const ac = AC; if (!ac) return;
+    const ac = AC; if (!ac || MUTE) return;
     const nn = Math.floor(ac.sampleRate*1.1), buf = ac.createBuffer(1, nn, ac.sampleRate);
     const d = buf.getChannelData(0);
     for (let i=0; i<nn; i++) d[i] = Math.random()*2-1;
@@ -1630,6 +1711,10 @@ const SFX = {
   score3(){ tone(587,.08,"triangle",.15); setTimeout(()=>tone(784,.08,"triangle",.15),85);
             setTimeout(()=>tone(1175,.22,"triangle",.17),170); },
   click(){ tone(340,.04,"square",.07,120); },
+  // sneaker bite on a hard plant/move
+  squeak(){ noise(.08,.1,2600,"bandpass"); tone(2050,.06,"sine",.035,900); },
+  // perfect-release chime, Mario-coin flavored
+  green(){ tone(1245,.12,"triangle",.13); setTimeout(()=>tone(1661,.2,"triangle",.11),70); },
 };
 
 /* =====================================================================
@@ -1773,7 +1858,12 @@ function releaseCharge(){
   const dv = Math.abs(m.v - m.center);
   const green = dv <= m.half;
   let timing;
-  if (green){ timing = 1.0; banner("GREEN!", "#54e08a"); impact(.07, 0); if (MSTAT.on) statHi("green", p); }
+  if (green){
+    timing = 1.0; banner("GREEN!", "#54e08a"); impact(.07, 0);
+    fxBurst({x:p.pos.x, y:1.6, z:p.pos.z}, 0x54e08a, 10, {speed:1.7, grav:2.5, life:.55, size:.26});
+    SFX.green();
+    if (MSTAT.on) statHi("green", p);
+  }
   else if (dv <= m.half*1.6) timing = .85;
   else timing = Math.max(.3, 1 - (dv - m.half)*2.4);
   const st = decideShotType(p);
@@ -1877,6 +1967,7 @@ function resolveDunkAtRim(p, rim){
     ball.vel.set(tmpA.x*2.5 + (Math.random()-.5)*2, 3, tmpA.z*2.5 + (Math.random()-.5)*2);
     impact(.06, .16);
     SFX.rim();
+    const hw = HOOPS[ball.pos.z < 0 ? 0 : 1]; if (hw) hw.wob = 1;
   }
 }
 function updateDunk(p, dt){
@@ -1950,6 +2041,7 @@ function updateDunk(p, dt){
     p.dunk = null; p.y = 0; p.vy = 0;
     p.landT = .32;
     p.vel.set(tmpA.x*1.7, 0, tmpA.z*1.7);
+    fxBurst({x:p.pos.x, y:.1, z:p.pos.z}, 0xcfc6b8, 6, {speed:1.3, grav:3, life:.45, size:.26});
     if (dk.mode==="dunk" && !dk.resolved){ dk.resolved = true; resolveDunkAtRim(p, rim); }
   }
 }
@@ -1981,6 +2073,26 @@ function finishScore(sh){
   banner((sh.label==="THREE"?"SPLASH":sh.label) + "  +" + sh.pts, col);
   if (slam){ SFX.slam(); }
   else { if (sh.pts===3) SFX.score3(); else SFX.score2(); SFX.swish(); }
+  /* ---- celebration juice ---- */
+  const rim = rimOf(team), hp = HOOPS[team];
+  if (hp){ hp.pulse = 1; if (slam) hp.flash = 1; }
+  const sparkCol = slam ? 0xff8a3c : (sh.pts===3 ? 0xffe08a : 0xffd76a);
+  fxBurst(rim, sparkCol, slam ? 18 : (sh.pts===3 ? 16 : 10),
+          {speed: slam ? 3.4 : 2.4, grav: 4.5, life: .65, size: .3});
+  if (FIRE.on[team])
+    fxBurst(rim, 0xff5a2c, 10, {speed: 2.2, grav: 2, life: .8, size: .34});
+  // scorer hops, nearby teammates throw their arms up — Saturday morning stuff
+  if (sh.shooter.y <= .02 && !sh.shooter.dunk && sh.shooter.rimHangT <= 0) sh.shooter.vy = 2.3;
+  for (const m of G.teams[team]){
+    if (m !== sh.shooter && dXZ(m.pos, sh.shooter.pos) < 6) m.jumpArms = Math.max(m.jumpArms, .9);
+  }
+  // hot streak: three straight team buckets sets the ball on fire
+  FIRE.streak[team]++; FIRE.streak[1-team] = 0; FIRE.on[1-team] = false;
+  if (FIRE.streak[team] >= 3 && !FIRE.on[team]){
+    FIRE.on[team] = true;
+    banner("ON FIRE!", "#ff8a3c");
+    SFX.roar();
+  }
   G.nextPoss = 1-team;
   setPoss(1-team); // transition starts during the celebration beat
   G.phase = "made"; G.madeT = 1.15;
@@ -1996,6 +2108,7 @@ function blockBall(defender){
   ball.vel.set(away.x*3.6 + (Math.random()-.5)*2, 1.2+Math.random(), away.z*3.6 + (Math.random()-.5)*2);
   banner("BLOCKED!", "#ffb545");
   impact(.12, .3);
+  fxBurst(ball.pos, 0xeef2fa, 10, {speed:2.4, grav:4, life:.5, size:.28});
   SFX.block();
 }
 
@@ -2058,6 +2171,10 @@ function userPass(type){
 }
 
 /* ---------------- dribble moves ---------------- */
+function moveDust(p){
+  SFX.squeak();
+  fxBurst({x:p.pos.x, y:.1, z:p.pos.z}, 0xd8cfc0, 5, {speed:1.1, grav:3, life:.4, size:.24});
+}
 function dribbleMove(p, kind){
   const rim = rimOf(p.team);
   const fwd = tmpA.subVectors(rim, p.pos); fwd.y=0; fwd.normalize();
@@ -2065,6 +2182,7 @@ function dribbleMove(p, kind){
   if (kind==="cross"){
     // Iverson: rock them to sleep one way, snap low across, GONE the other
     if (p.cd.cross>0) return; p.cd.cross = 1.15;
+    moveDust(p);
     const sgn = (p===G.user && joy.mag>.2) ? Math.sign(joy.x||1) : (Math.random()<.5?-1:1);
     p.crossSgn = sgn;
     p.crossT = .46;              // beat 1 sells the fake, beat 2 explodes
@@ -2073,6 +2191,7 @@ function dribbleMove(p, kind){
   } else if (kind==="euro"){
     // two beats: hard step one way, harder step back the other, downhill
     if (p.cd.euro>0 || dXZ(p.pos, rim) > 8.5) return; p.cd.euro = 1.7;
+    moveDust(p);
     p.euroSgn = (p===G.user && Math.abs(joy.x)>.2) ? Math.sign(joy.x) : (Math.random()<.5?-1:1);
     p.euroT = .44;
     p.euroBoost = 1.2;        // finishing bonus off the gather
@@ -2083,6 +2202,7 @@ function dribbleMove(p, kind){
     // hop away from the rim to create jumper space
     const d = dXZ(p.pos, rim);
     if (p.cd.step>0 || d < 2.2) return; p.cd.step = 1.9;
+    moveDust(p);
     const sgn = Math.random()<.5 ? -1 : 1;
     p.vel.set(0,0,0).addScaledVector(fwd, -6.8).addScaledVector(side, sgn*1.7);
     p.stepBoost = 1.25;       // window + pct bonus on the pull-up
@@ -2119,6 +2239,8 @@ function dribbleMove(p, kind){
       if (primary){
         impact(.08, .1);
         if (MSTAT.on) statHi("ankle_break", p);
+        fxBurst({x:d.pos.x, y:.12, z:d.pos.z}, 0xffd76a, 7, {speed:1.4, grav:3.5, life:.5, size:.26});
+        impact(.05, .1);
         if (Math.random()<.6 && (kind==="cross"||kind==="spin"))
           subBanner(kind==="cross" ? "ANKLES SNATCHED" : "SPIN CYCLE");
       }
@@ -2193,6 +2315,7 @@ function trySteal(p){
         ball.vel.set(tmpA.x*2.8, .8, tmpA.z*2.8);
         banner("STEAL!", "#ffb545");
         impact(.08, .12);
+        fxBurst(ball.pos, 0xffd76a, 8, {speed:1.9, grav:3.5, life:.45, size:.26});
         SFX.steal();
         h.freezeT = .35;
         return;
@@ -2617,11 +2740,14 @@ function updatePlayers(dt){
     p.pos.z = clamp(p.pos.z + p.vel.z*dt, -13.85, 13.85);
 
     if (p.y>0 || p.vy!==0){
+      const fallV = p.vy;
       p.vy -= PGRAV*dt;
       p.y += p.vy*dt;
       if (p.y<=0){
         p.y=0; p.vy=0;
         if (p.hangFall){ p.hangFall=false; p.landT=.32; }  // drop off the rim
+        // every real jump lands with a squash beat — cartoon-physical
+        else if (fallV < -3.2) p.landT = Math.max(p.landT || 0, .22);
       }
     }
 
@@ -2872,6 +2998,7 @@ function updateBall(dt){
             catchBall(d);
             banner("INTERCEPTED!", "#ffb545");
             impact(.07, .1);
+            fxBurst(ball.pos, 0xffd76a, 8, {speed:1.9, grav:3.5, life:.45, size:.26});
             SFX.steal();
             return;
           }
@@ -2915,6 +3042,7 @@ function updateBall(dt){
         else {
           SFX.rim();
           impact(0, .09);
+          const hw = HOOPS[ball.pos.z < 0 ? 0 : 1]; if (hw) hw.wob = 1;
           const rim = rimOf(sh ? sh.shooter.team : G.poss);
           ball.lastShooter = sh ? sh.shooter : null;
           ball.shot = null;
@@ -3128,6 +3256,15 @@ const elClock = document.getElementById("hClock"), elShot = document.getElementB
 const elQ = document.getElementById("hQ");
 const pdA = document.getElementById("pdA"), pdB = document.getElementById("pdB");
 function updateHUD(){
+  // score numbers pop when they change
+  if (updateHUD._a !== G.score[0]){
+    updateHUD._a = G.score[0];
+    elScA.classList.remove("bump"); void elScA.offsetWidth; elScA.classList.add("bump");
+  }
+  if (updateHUD._b !== G.score[1]){
+    updateHUD._b = G.score[1];
+    elScB.classList.remove("bump"); void elScB.offsetWidth; elScB.classList.add("bump");
+  }
   elScA.textContent = G.score[0];
   elScB.textContent = G.score[1];
   const s = Math.max(0, Math.ceil(G.qTime));
@@ -3217,6 +3354,8 @@ function placeAll(){
 }
 function resetGame(){
   statReset();
+  FIRE.streak = [0,0]; FIRE.on = [false,false];
+  banner("GAME ON!", "#39d4ff");
   G.inbound = null; G.screener = null;
   G.score = [0,0];
   G.turbo = false; G.stam = 1; G.chipFor = null;
@@ -3497,8 +3636,19 @@ function tick(now){
       updateCamera(dt);
     }
     syncBallMesh(dt);
+    // comet trail while the ball flies (flames when the shooting team is hot)
+    FX.trailT -= dt;
+    if (FX.trailT <= 0 && (ball.state==="shot" || (ball.state==="pass" && ball.pass?.oop))){
+      FX.trailT = .028;
+      const hotTeam = ball.shot ? ball.shot.shooter.team : ball.pass?.fromTeam;
+      fxSpawn(ball.pos.x, ball.pos.y, ball.pos.z,
+              FIRE.on[hotTeam] ? 0xff6a2c : 0xcfe0ff,
+              {speed:.08, grav:0, life:.26, size: FIRE.on[hotTeam] ? .3 : .2});
+    }
     }
   }
+  fxUpdate(dt);
+  hoopUpdate(dt, now);
   // crowd is always breathing; goes wild when someone scores
   if (ARENA.groups.length){
     G.hype = Math.max(0, (G.hype||0) - dt*.7);

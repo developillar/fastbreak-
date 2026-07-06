@@ -30,7 +30,7 @@ import {
   tierOf, tierProgress, PARK_TIERS,
 } from "../park/park.js";
 
-const APP_VERSION = "0.12.1";   // keep in sync with sw.js / version.json / footer
+const APP_VERSION = "0.13.0";   // keep in sync with sw.js / version.json / footer
 const $ = id => document.getElementById(id);
 const store = new SaveStore();
 const league = buildLeague();
