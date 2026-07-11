@@ -1,0 +1,27 @@
+name: Deploy to GitHub Pages
+
+# Pages is configured to serve the gh-pages branch; this workflow keeps that
+# branch in sync so every push here auto-deploys the site.
+on:
+  push:
+    branches:
+      - main
+      - claude/myplayer-mycareer-arch-8opt9v
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  sync-gh-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Force-sync gh-pages to this commit
+        run: git push origin HEAD:gh-pages --force
