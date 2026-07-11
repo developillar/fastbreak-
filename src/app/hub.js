@@ -24,13 +24,15 @@ import { SaveStore } from "../save/store.js";
 import {
   startCareer, currentEvent, completeScene, careerGameConfig,
   recordGame, runSimBlock, careerContext, interpolate, STORY,
+  ensureCareerLife, runTraining, restDay, canTrain, canRest, DRILLS, formOf,
+  careerTeams,
 } from "../career/career.js";
 import {
   COURTS, courtById, parkGameConfig, recordParkGame, ensurePark,
   tierOf, tierProgress, PARK_TIERS,
 } from "../park/park.js";
 
-const APP_VERSION = "0.13.0";   // keep in sync with sw.js / version.json / footer
+const APP_VERSION = "0.14.0";   // keep in sync with sw.js / version.json / footer
 const $ = id => document.getElementById(id);
 const store = new SaveStore();
 const league = buildLeague();
@@ -100,6 +102,7 @@ function forceRefresh(v) {
 /* ---------------- views ---------------- */
 const VIEWS = ["viewHome", "viewCreate", "viewUpgrade", "viewBadges", "viewResult", "viewCareer", "viewCutscene", "viewPark", "viewSettings"];
 let resultReturnView = "viewHome";   // where BACK on the result screen goes
+let resultHeadline = null;           // one-shot: career games print a headline
 function show(view) {
   for (const v of VIEWS) $(v).classList.toggle("hidden", v !== view);
 }
@@ -166,6 +169,8 @@ function renderHome() {
     $("mpSub").textContent = (mp.body ? formatHeight(mp.body.heightIn) + " · " : "") +
       mp.position + " · " + ARCHETYPES[mp.archetypeId].label;
     countUpNum($("mpOvr"), myPlayerOvr(mp));
+    const mf = $("mpFace");
+    if (mf && mp.body) drawFace(mf, toLook(mp.body), { jersey: "#2f7bff" });
     $("mpCur").textContent = mp.up + " UP · " + mp.rep + " REP";
     const t = mp.totals;
     $("mpTotals").textContent = t.games + " GP · " + t.wins + " W · " + t.pts + " PTS";
@@ -427,10 +432,11 @@ function consumePlayableResult() {
     if (careerCur && !careerCur.done && careerCur.event.type === "game") {
       // returning from a career key game: record into the story
       save.career.pending = null;
-      const r = recordGame(save, result);      // rewards applied inside
+      const r = recordGame(save, result, { league });  // rewards applied inside
       store.save(save);
       if (r.retry) toast("MUST-WIN: RUN IT BACK");
       else if (r.earned.up || r.earned.rep) toast(`+${r.earned.up} UP · +${r.earned.rep} REP`);
+      resultHeadline = save.career.life?.news[0] || null;
       resultReturnView = "viewCareer";
     } else {
       afterMatch(result);
@@ -477,6 +483,7 @@ function renderCareer() {
   const cur = currentEvent(c);
   const ctx = careerContext(save, league);
   $("carRecord").textContent = c.record.w + "W — " + c.record.l + "L";
+  renderCareerLife();
 
   if (cur.done) {
     $("carChapter").textContent = "CAREER COMPLETE";
@@ -507,6 +514,17 @@ function renderCareer() {
           <div class="bigbtn" id="evPlayGame">PLAY ›</div>
           <div class="bigbtn alt" id="evSimGame">SIM</div>
         </div></div>`;
+      // scouting strip: who's next, their strength vs your squad
+      try {
+        const { home, away } = careerTeams(save, league);
+        const myOvr = Math.round(home.lineup.reduce((a, p) => a + Object.values(p.attrs).reduce((x, y) => x + y, 0) / Object.keys(p.attrs).length, 0) / 5 * 74 + 25);
+        const opOvr = Math.round(away.lineup.reduce((a, p) => a + Object.values(p.attrs).reduce((x, y) => x + y, 0) / Object.keys(p.attrs).length, 0) / 5 * 74 + 25);
+        const ui = "#" + ((away.colors?.ui && String(away.colors.ui).replace("#", "")) || "aeb9c9");
+        $("carEvent").querySelector(".evcard").insertAdjacentHTML("beforeend",
+          `<div class="nextup"><span class="vsdot" style="background:${ui}"></span>
+            <span class="nu">NEXT UP · <b>${away.name || away.abbr}</b></span>
+            <span class="ovrs">${myOvr} <span style="color:#586897">vs</span> ${opOvr}</span></div>`);
+      } catch {}
       $("evPlayGame")?.addEventListener("click", launchCareerGame);
       $("evSimGame")?.addEventListener("click", simCareerGame);
     } else if (ev.type === "sim") {
@@ -529,6 +547,75 @@ function renderCareer() {
       : `<div class="hrow"><span>${h.label}${h.simmed ? " (SIM)" : ""}</span>
           <b class="${h.won ? "gpos" : "gneg"}">${h.won ? "W" : "L"} ${h.score.home}-${h.score.away} · ${h.grade || ""}</b></div>`
   ).join("") || `<div class="hrow"><span>NO GAMES YET</span><b>—</b></div>`;
+}
+
+/* ---------------- career life (energy / bonds / training / feed) -------- */
+function renderCareerLife() {
+  const L = ensureCareerLife(save);
+  if (!L || !$("carLife")) return;
+  const mp = save.myPlayer;
+  const fc = $("carFace");
+  if (fc && mp?.body) drawFace(fc, toLook(mp.body), { jersey: "#2f7bff" });
+  const setBar = (id, v, lowBad) => {
+    const bar = $(id), val = $(id + "V");
+    if (!bar) return;
+    bar.style.width = v + "%";
+    bar.classList.toggle("low", !!lowBad && v < 35);
+    if (val) val.textContent = v;
+  };
+  setBar("mEnergy", L.energy, true);
+  setBar("mCoach", L.coach);
+  setBar("mFans", L.fans);
+  setBar("mChem", L.chem);
+
+  const st = L.stats, gp = Math.max(1, st.gp);
+  const form = formOf(save);
+  $("carStats").innerHTML = st.gp === 0
+    ? `<div class="statchip" style="flex:1 1 100%"><b>—</b><span>STATS LAND AFTER YOUR FIRST GAME</span></div>`
+    : `<div class="statchip"><b>${(st.pts / gp).toFixed(1)}</b><span>PPG</span></div>
+       <div class="statchip"><b>${(st.reb / gp).toFixed(1)}</b><span>RPG</span></div>
+       <div class="statchip"><b>${(st.ast / gp).toFixed(1)}</b><span>APG</span></div>
+       <div class="statchip"><b>${st.bestPts}</b><span>CAREER HIGH</span></div>
+       <div class="statchip ${form > 0 ? "hot" : form < 0 ? "cold" : ""}">
+         <b>${form > 0 ? "▲ HOT" : form < 0 ? "▼ COLD" : "— EVEN"}</b><span>FORM</span></div>`;
+
+  const bt = $("btnTrain"), br = $("btnRest");
+  if (bt) {
+    bt.classList.toggle("dis", !canTrain(save));
+    bt.textContent = L.trainAvail > 0 ? `TRAIN (${L.trainAvail})` : "TRAIN (0)";
+    bt.onclick = () => {
+      const d = $("carDrills");
+      if (!canTrain(save)) return;
+      d.classList.toggle("hidden");
+      if (!d.classList.contains("hidden")) {
+        d.innerHTML = DRILLS.map(dr =>
+          `<div class="drill" data-d="${dr.id}"><b>${dr.label}</b><span>${dr.blurb}</span></div>`).join("");
+        d.querySelectorAll(".drill").forEach(el => el.addEventListener("click", () => {
+          try {
+            const r = runTraining(save, el.dataset.d);
+            store.save(save);
+            toast(`${r.drill.label} · +${r.up} UP`);
+            d.classList.add("hidden");
+            renderCareer();
+          } catch (e) { toast(e.message.toUpperCase()); }
+        }));
+      }
+    };
+  }
+  if (br) {
+    br.classList.toggle("dis", !canRest(save));
+    br.onclick = () => {
+      try {
+        restDay(save);
+        store.save(save);
+        toast("REST DAY — ENERGY RESTORED");
+        renderCareer();
+      } catch (e) { toast(e.message.toUpperCase()); }
+    };
+  }
+
+  $("carNews").innerHTML = (L.news.length ? L.news : ["THE FEED IS QUIET. GO MAKE NOISE."])
+    .slice(0, 5).map(n => `<div class="newsline">${n}</div>`).join("");
 }
 
 /* ---------------- cutscene player ---------------- */
@@ -625,10 +712,11 @@ function launchCareerGame() {
 function simCareerGame() {
   const cfg = careerGameConfig(save, league);
   const result = simulate(cfg);
-  const r = recordGame(save, result, { simmed: true });
+  const r = recordGame(save, result, { simmed: true, league });
   store.save(save);
   if (r.retry) toast("MUST-WIN: RUN IT BACK");
   else if (r.earned.up || r.earned.rep) toast(`+${r.earned.up} UP · +${r.earned.rep} REP (SIM)`);
+  resultHeadline = save.career.life?.news[0] || null;
   resultReturnView = "viewCareer";
   renderResult(result);
   show("viewResult");
@@ -726,6 +814,12 @@ function countUpScore(el, a, b, ms = 700) {
 }
 function renderResult(r) {
   $("resTitle").textContent = (r.engine === "headless" ? "SIMULATED · " : "") + "FINAL";
+  const rh = $("resHead");
+  if (rh){
+    rh.classList.toggle("hidden", !resultHeadline);
+    rh.textContent = resultHeadline || "";
+    resultHeadline = null;
+  }
   countUpScore($("resScore"), r.score.home, r.score.away);
   $("resMeta").textContent = (r.meta?.label || "") + " · " +
     r.periods.map(p => p.home + "-" + p.away).join("  ");

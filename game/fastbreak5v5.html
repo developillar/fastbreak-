@@ -215,6 +215,26 @@
   #finalMsg{font-family:var(--cond);font-size:15px;font-style:italic;letter-spacing:.28em;padding-left:.28em;
     color:var(--dim);font-weight:900}
   .tiny{margin-top:22px;font-size:10px;color:rgba(238,242,250,.35);letter-spacing:.14em}
+
+  /* ---------- pause + post-game cards ---------- */
+  .mcard{width:100%;max-width:320px;margin:12px 0 2px;padding:13px 15px;text-align:left;
+    background:linear-gradient(170deg,rgba(20,26,44,.92),rgba(9,12,22,.92));border:1px solid var(--line);
+    clip-path:polygon(9px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 9px)}
+  .mcard .mchead{font-size:8.5px;font-weight:800;letter-spacing:.3em;color:var(--dim);margin-bottom:7px}
+  .pscore{display:flex;align-items:baseline;justify-content:space-between;
+    font-family:var(--cond);font-weight:900;font-style:italic}
+  .pscore span{font-size:14px;letter-spacing:.1em}
+  .pscore b{font-size:30px;font-variant-numeric:tabular-nums}
+  .pmeta{font-size:9px;font-weight:800;letter-spacing:.2em;color:var(--dim);margin-top:5px}
+  .pline{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08);
+    font-size:10.5px;font-weight:700;color:#c4d2ec;line-height:1.6}
+  .pline b{color:var(--amber);font-family:var(--cond);font-style:italic;letter-spacing:.06em;font-size:12.5px}
+  .qtable{width:100%;border-collapse:collapse;margin-top:4px;font-variant-numeric:tabular-nums}
+  .qtable th{font-size:8px;font-weight:800;letter-spacing:.12em;color:rgba(238,242,250,.4);
+    padding:3px 2px;text-align:center;border-bottom:1px solid rgba(255,255,255,.1)}
+  .qtable td{font-size:11.5px;font-weight:800;padding:4px 2px;text-align:center}
+  .qtable td:first-child,.qtable th:first-child{text-align:left;font-family:var(--cond);font-style:italic;letter-spacing:.1em}
+  .qtable .tot{color:var(--amber)}
 </style>
 </head>
 <body>
@@ -313,11 +333,13 @@
     <div class="ttl">FINAL</div>
     <div id="finalScore">0 — 0</div>
     <div id="finalMsg">GAME OVER</div>
+    <div id="finalDetail"></div>
     <div class="go" id="againBtn">RUN IT BACK</div>
   </div>
 
   <div class="overlay hidden" id="paused">
     <div class="ttl">PAUSED</div>
+    <div id="pauseInfo"></div>
     <div class="go" id="resumeBtn">RESUME</div>
     <div class="go alt" id="simEndBtn">SIM TO END</div>
     <div class="go alt" id="editorBtn2">ROSTERS</div>
@@ -3383,6 +3405,7 @@ function endGame(){
   document.getElementById("finalScore").textContent = a + " — " + b;
   document.getElementById("finalMsg").textContent =
     a>b ? "YOU TOOK THE CROWN" : "CPU RUNS IT — REMATCH?";
+  document.getElementById("finalDetail").innerHTML = finalDetailHtml();
   offBtns.classList.add("hidden");
   defBtns.classList.add("hidden");
   document.getElementById("bTurbo").classList.add("hidden");
@@ -3394,7 +3417,60 @@ function endGame(){
 function togglePause(){
   if (G.phase==="menu" || G.phase==="over") return;
   G.paused = !G.paused;
+  if (G.paused) document.getElementById("pauseInfo").innerHTML = pauseInfoHtml();
   pausedEl.classList.toggle("hidden", !G.paused);
+}
+/* live match card shown while paused: score, clock, your line so far */
+function statLineHtml(p){
+  const l = statLine(p);
+  return `<div class="pline"><b>${p.role} ${p.name}</b><br>` +
+    `${l.pts} PTS · ${l.reb} REB · ${l.ast} AST · ${l.stl} STL · ` +
+    `${l.fgm}/${l.fga} FG${l.tpa ? ` · ${l.tpm}/${l.tpa} 3PT` : ""}</div>`;
+}
+function pauseInfoHtml(){
+  const nmA = document.getElementById("nmA"), nmB = document.getElementById("nmB");
+  const s = Math.max(0, Math.ceil(G.qTime));
+  const clock = Math.floor(s/60) + ":" + String(s%60).padStart(2,"0");
+  const q = G.quarter<=G.rulesQ ? "Q"+G.quarter : "OT";
+  const me = LOCKED || (BRIDGE?.myPlayer?.side === "home" ? G.teams[0][BRIDGE.myPlayer.index|0] : null);
+  return `<div class="mcard"><div class="mchead">${BRIDGE?.meta?.label || "FRIENDLY"}</div>
+    <div class="pscore">
+      <span style="color:${nmA.style.color || "#4f8cff"}">${nmA.textContent}</span>
+      <b>${G.score[0]} — ${G.score[1]}</b>
+      <span style="color:${nmB.style.color || "#ff5449"}">${nmB.textContent}</span></div>
+    <div class="pmeta">${q} · ${clock} LEFT · ${["ROOKIE","PRO","ALL-STAR"][G.sel.diff] || "PRO"}</div>
+    ${me ? statLineHtml(me) : ""}</div>`;
+}
+/* post-game card: score by quarter, player of the game, your line */
+function finalDetailHtml(){
+  const nmA = document.getElementById("nmA").textContent;
+  const nmB = document.getElementById("nmB").textContent;
+  const qs = MSTAT.periods;
+  let rows = "";
+  if (qs.length){
+    const heads = qs.map((_, i) => `<th>${i < G.rulesQ ? "Q" + (i+1) : "OT"}</th>`).join("");
+    rows = `<table class="qtable">
+      <tr><th></th>${heads}<th>T</th></tr>
+      <tr><td>${nmA}</td>${qs.map(p=>`<td>${p.home}</td>`).join("")}<td class="tot">${G.score[0]}</td></tr>
+      <tr><td>${nmB}</td>${qs.map(p=>`<td>${p.away}</td>`).join("")}<td class="tot">${G.score[1]}</td></tr>
+    </table>`;
+  }
+  // player of the game across both squads
+  let pog = null, best = -1;
+  for (const p of G.players){
+    const l = MSTAT.lines.get(p.id); if (!l) continue;
+    const v = l.pts + l.reb*1.2 + l.ast*1.5 + (l.stl + l.blk)*1.5;
+    if (v > best){ best = v; pog = p; }
+  }
+  const me = LOCKED || (BRIDGE?.myPlayer?.side === "home" ? G.teams[0][BRIDGE.myPlayer.index|0] : null);
+  return `<div class="mcard"><div class="mchead">BOX</div>${rows}
+    ${pog ? `<div class="pline"><b>PLAYER OF THE GAME</b><br>${statLineText(pog)}</div>` : ""}
+    ${me && me !== pog ? `<div class="pline"><b>YOUR NIGHT</b><br>${statLineText(me)}</div>` : ""}
+  </div>`;
+}
+function statLineText(p){
+  const l = statLine(p);
+  return `${p.role} ${p.name} — ${l.pts} PTS, ${l.reb} REB, ${l.ast} AST, ${l.fgm}/${l.fga} FG`;
 }
 document.getElementById("startBtn").addEventListener("pointerup", startGame);
 document.getElementById("againBtn").addEventListener("pointerup", ()=>{

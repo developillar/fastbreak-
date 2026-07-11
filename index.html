@@ -153,7 +153,11 @@
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 8px)}
   .bigbtn:active{filter:brightness(1.3)}
   .mprow{display:flex;align-items:stretch}
-  .mpinfo{flex:1;padding:15px 8px 13px 20px;min-width:0}
+  #mpFace{width:66px;height:73px;flex:none;align-self:center;margin-left:16px;
+    border:1px solid rgba(255,181,69,.35);
+    background:radial-gradient(120% 100% at 50% 20%,#243046,#0a0f1d 85%);
+    clip-path:polygon(6px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 6px)}
+  .mpinfo{flex:1;padding:15px 8px 13px 14px;min-width:0}
   #mpName{font-family:var(--cond);font-weight:900;font-style:italic;font-size:25px;letter-spacing:.02em;
     line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #mpSub{font-size:9px;font-weight:800;letter-spacing:.26em;color:var(--amber);margin-top:5px}
@@ -264,6 +268,8 @@
     animation:scorein .5s cubic-bezier(.2,1.4,.4,1) both .1s}
   @keyframes scorein{from{opacity:0;transform:scale(.55)}60%{transform:scale(1.06)}to{opacity:1;transform:scale(1)}}
   #resMeta{font-size:9px;letter-spacing:.2em;color:var(--dim);text-align:center;font-weight:800;margin-bottom:10px}
+  #resHead{text-align:center;font-family:var(--cond);font-weight:900;font-style:italic;font-size:15px;
+    letter-spacing:.08em;color:var(--amber);margin:2px 0 6px;animation:csfade .4s both}
   #resGrade .fmeta{text-align:center;font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--good);
     padding:8px;margin-bottom:8px;background:rgba(56,224,127,.07);border:1px solid rgba(56,224,127,.25);
     animation:stampin .45s cubic-bezier(.2,1.5,.4,1) both .35s}
@@ -278,6 +284,52 @@
 
   /* ================= MyCareer ================= */
   #carPanel::before{background:linear-gradient(180deg,var(--good),#0f9e56)}
+  /* career life card */
+  #carLife::before{background:linear-gradient(180deg,var(--cyan),var(--blue))}
+  .liferow{display:flex;gap:14px;align-items:center}
+  #carFace{width:64px;height:70px;flex:none;border:1px solid var(--line);
+    background:radial-gradient(120% 100% at 50% 20%,#182446,#0a0f1d 85%);
+    clip-path:polygon(6px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 6px)}
+  .lifemeters{flex:1;min-width:0}
+  .mrow{display:grid;grid-template-columns:46px 1fr 26px;gap:8px;align-items:center;padding:2.5px 0;
+    font-size:8.5px;font-weight:800;letter-spacing:.14em;color:var(--dim)}
+  .mrow b{font-size:10px;text-align:right;color:var(--txt);font-variant-numeric:tabular-nums}
+  .mbar{height:7px;background:#0a0f1d;border:1px solid rgba(120,160,255,.12);overflow:hidden;
+    clip-path:polygon(2px 0,100% 0,100% calc(100% - 3px),calc(100% - 3px) 100%,0 100%,0 2px)}
+  .mbar i{display:block;height:100%;background:linear-gradient(90deg,#38e07f,#b8f04a);
+    transition:width .5s cubic-bezier(.2,.9,.3,1)}
+  .mbar i.low{background:linear-gradient(90deg,#ff4438,#ff8a3c)}
+  .mbar.coach i{background:linear-gradient(90deg,var(--blue),var(--cyan))}
+  .mbar.fans i{background:linear-gradient(90deg,var(--amber),#ff7a3c)}
+  .mbar.chem i{background:linear-gradient(90deg,#b79aff,#7a4fd1)}
+  #carStats{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px}
+  .statchip{flex:1;min-width:56px;text-align:center;padding:7px 2px;background:#0d1428;border:1px solid var(--line);
+    clip-path:polygon(5px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 5px)}
+  .statchip b{display:block;font-family:var(--cond);font-weight:900;font-style:italic;font-size:17px;line-height:1}
+  .statchip span{font-size:7.5px;font-weight:800;letter-spacing:.16em;color:var(--dim)}
+  .statchip.hot b{color:var(--amber)} .statchip.cold b{color:#7fa0d8}
+  #carLife .evbtns{margin-top:11px}
+  #carLife .evbtns .bigbtn.dis{opacity:.35;pointer-events:none}
+  #carDrills{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  #carDrills .drill{flex:1 1 44%;padding:10px 10px;cursor:pointer;background:#0d1a2e;
+    border:1px solid rgba(57,212,255,.35);
+    clip-path:polygon(7px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 7px)}
+  #carDrills .drill b{font-family:var(--cond);font-weight:900;font-style:italic;font-size:14px;letter-spacing:.06em}
+  #carDrills .drill span{display:block;font-size:8.5px;color:var(--dim);font-weight:600;margin-top:3px}
+  #carDrills .drill:active{filter:brightness(1.4)}
+  /* the feed */
+  #carNewsPanel::before{background:linear-gradient(180deg,var(--amber),#ff7a3c)}
+  .newsline{font-size:10.5px;font-weight:700;color:#c4d2ec;padding:5.5px 0;line-height:1.45;
+    border-bottom:1px solid rgba(120,160,255,.07)}
+  .newsline::before{content:"◆ ";color:var(--amber);font-size:8px}
+  /* next-up opponent strip inside the event card */
+  .nextup{display:flex;align-items:center;gap:10px;margin-top:10px;padding:9px 11px;
+    background:rgba(8,12,24,.55);border:1px solid rgba(120,160,255,.14);
+    clip-path:polygon(6px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 6px)}
+  .nextup .vsdot{width:9px;height:9px;flex:none;border-radius:2px}
+  .nextup .nu{flex:1;font-size:9.5px;font-weight:800;letter-spacing:.12em;color:#c4d2ec}
+  .nextup b{font-family:var(--cond);font-style:italic;font-size:13px}
+  .nextup .ovrs{font-family:var(--cond);font-weight:900;font-style:italic;font-size:15px;color:var(--amber)}
   #carBanner{font-size:10px;font-weight:800;letter-spacing:.2em;color:var(--dim);line-height:1.9}
   #carBanner b{color:var(--txt)}
   .evcard{position:relative;border:1px solid rgba(56,224,127,.35);margin:10px 0;padding:16px 16px 14px 20px;
@@ -399,6 +451,7 @@
       </div>
       <div id="mpSome" class="hidden">
         <div class="mprow">
+          <canvas id="mpFace" width="140" height="154"></canvas>
           <div class="mpinfo">
             <div id="mpName">—</div>
             <div id="mpSub"></div>
@@ -462,7 +515,7 @@
     <div class="rowlink" id="btnReset" style="color:#7a4046">RESET SAVE DATA</div>
 
     <div class="foot">ENGINE-AS-SERVICE · ONE SAVE BLOB · PWA<br>NO PAY-TO-WIN. EVER.<br>
-      <span id="verTag" style="color:#4a5878">V0.13.0</span></div>
+      <span id="verTag" style="color:#4a5878">V0.14.0</span></div>
   </div>
 
   <!-- ============ CREATE ============ -->
@@ -537,7 +590,37 @@
       <div class="ptitle" id="carChapter">MYCAREER</div>
       <div id="carBanner"></div>
     </div>
+
+    <!-- career life: portrait, energy, bonds, form, stats -->
+    <div class="panel" id="carLife">
+      <div class="liferow">
+        <canvas id="carFace" width="140" height="154"></canvas>
+        <div class="lifemeters">
+          <div class="mrow"><span class="mlab">ENERGY</span>
+            <span class="mbar"><i id="mEnergy"></i></span><b id="mEnergyV"></b></div>
+          <div class="mrow"><span class="mlab">COACH</span>
+            <span class="mbar coach"><i id="mCoach"></i></span><b id="mCoachV"></b></div>
+          <div class="mrow"><span class="mlab">FANS</span>
+            <span class="mbar fans"><i id="mFans"></i></span><b id="mFansV"></b></div>
+          <div class="mrow"><span class="mlab">CHEM</span>
+            <span class="mbar chem"><i id="mChem"></i></span><b id="mChemV"></b></div>
+        </div>
+      </div>
+      <div id="carStats"></div>
+      <div class="evbtns">
+        <div class="bigbtn alt" id="btnTrain">TRAIN</div>
+        <div class="bigbtn alt" id="btnRest">REST DAY</div>
+      </div>
+      <div id="carDrills" class="hidden"></div>
+    </div>
+
     <div id="carEvent"></div>
+
+    <div class="panel" id="carNewsPanel">
+      <div class="ptitle">THE FEED</div>
+      <div id="carNews"></div>
+    </div>
+
     <div class="panel">
       <div class="ptitle">SEASON LOG <span class="balance" id="carRecord"></span></div>
       <div id="carHistory"></div>
@@ -593,6 +676,7 @@
   <div id="viewResult" class="view hidden">
     <div class="panel">
       <div class="ptitle" id="resTitle">FINAL</div>
+      <div id="resHead" class="hidden"></div>
       <div id="resScore">0 — 0</div>
       <div id="resMeta"></div>
       <div id="resGrade"></div>

@@ -33,7 +33,9 @@
    - `speaker` is free text. Use "NARRATOR" for letterbox narration,
      "YOU" for the MyPlayer, or any character name you invent. Speakers
      with a portrait in the cast table (hub.js CAST) show their face.
-   - choice.options[].effects: { rep: n, up: n, flag: "anyString" }.
+   - choice.options[].effects: { rep, up, flag: "anyString", rival,
+     coach, fans, chem, energy } — the last four move the career-life
+     meters (bonds/energy) shown on the MyCareer screen.
      Flags accumulate in career.flags — use them later for callbacks
      (the engine exposes them; scenes can be gated on flags via `requires`).
    - A scene may set `requires: "someFlag"` to only play if that flag was
@@ -77,8 +79,8 @@ export const STORY = [
         choice: {
           prompt: "The card is in {name}'s hand. Say something.",
           options: [
-            { id: "hungry", text: "\"Three weeks is two more than I need.\"", effects: { rep: 60, flag: "hungry" } },
-            { id: "cool", text: "Nod. Pocket the card. Get back to work.", effects: { rep: 60, flag: "cool" } },
+            { id: "hungry", text: "\"Three weeks is two more than I need.\"", effects: { rep: 60, flag: "hungry", fans: 4 } },
+            { id: "cool", text: "Nod. Pocket the card. Get back to work.", effects: { rep: 60, flag: "cool", coach: 4 } },
           ],
         },
       },
@@ -138,8 +140,8 @@ export const STORY = [
         choice: {
           prompt: "First words as a pro, into every camera on earth?",
           options: [
-            { id: "grateful", text: "\"This is for Sixth Street. All of it.\"", effects: { rep: 80, flag: "grateful" } },
-            { id: "warning", text: "\"Whoever passed on me — write the date down.\"", effects: { rep: 80, flag: "onNotice" } },
+            { id: "grateful", text: "\"This is for Sixth Street. All of it.\"", effects: { rep: 80, flag: "grateful", fans: 6, chem: 3 } },
+            { id: "warning", text: "\"Whoever passed on me — write the date down.\"", effects: { rep: 80, flag: "onNotice", fans: 4, rival: 1 } },
           ],
         },
       },
